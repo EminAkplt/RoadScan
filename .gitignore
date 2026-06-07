@@ -1,0 +1,19 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Çevre değişkenleri
+.env
+.env.local
+
+# Yüklenen snapshot görüntüleri (klasör yapısı .gitkeep ile korunur)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.tmp

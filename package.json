@@ -1,0 +1,32 @@
+{
+  "name": "roadscan",
+  "version": "1.0.0",
+  "description": "Araç içi dashcam ile gerçek zamanlı yol bozukluğu (çatlak/çukur) tespit, GPS eşleştirme ve yönetim paneli sistemi.",
+  "main": "backend/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js",
+    "db:init": "node backend/init-db.js"
+  },
+  "keywords": [
+    "pothole-detection",
+    "opencv",
+    "dashcam",
+    "road-monitoring",
+    "leaflet",
+    "express",
+    "postgresql"
+  ],
+  "author": "Mehmet Emin AKPOLAT",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
