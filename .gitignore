@@ -1,5 +1,7 @@
 # Node
 node_modules/
+# ONNX Runtime Web dosyaları npm install (postinstall) ile üretilir
+frontend/vendor/
 npm-debug.log*
 yarn-error.log*
 
@@ -10,6 +12,17 @@ yarn-error.log*
 # Yüklenen snapshot görüntüleri (klasör yapısı .gitkeep ile korunur)
 backend/uploads/*
 !backend/uploads/.gitkeep
+
+# Eğitim (Python venv, veri seti, çıktılar — repoya gitmez; .onnx model dahil edilir)
+training/.venv/
+training/dataset/
+training/dataset_raw/
+training/datasets/
+training/runs/
+runs/
+training/*.pt
+training/__pycache__/
+*.cache
 
 # IDE / OS
 .vscode/

@@ -1,0 +1,7 @@
+{
+  "input_size": 640,
+  "names": {
+    "0": "pothole"
+  },
+  "num_classes": 1
+}

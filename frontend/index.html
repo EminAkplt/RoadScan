@@ -3,54 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RoadScan — Yol Bozukluğu Tespit Motoru</title>
+  <title>RoadScan — Yol Bozukluğu Tespit Motoru (YOLO)</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --panel: #1a2332;
-      --panel-2: #232f42;
-      --txt: #e6edf3;
-      --muted: #8b97a8;
-      --accent: #2dd4bf;
-      --sari: #facc15;
-      --turuncu: #fb923c;
-      --kirmizi: #ef4444;
-      --border: #2d3a4f;
+      --bg: #0f1419; --panel: #1a2332; --panel-2: #232f42;
+      --txt: #e6edf3; --muted: #8b97a8; --accent: #2dd4bf; --border: #2d3a4f;
+      --sari: #facc15; --turuncu: #fb923c; --kirmizi: #ef4444;
     }
     * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--txt);
-    }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--txt); }
     header {
-      padding: 14px 20px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: 10px;
+      padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
     }
     header h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 8px; }
     header .status { font-size: 13px; color: var(--muted); }
-    header a {
-      color: var(--accent); text-decoration: none; font-size: 14px;
-      border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px;
-    }
+    header a { color: var(--accent); text-decoration: none; font-size: 14px; border: 1px solid var(--border); padding: 6px 12px; border-radius: 8px; }
     .wrap { max-width: 1100px; margin: 0 auto; padding: 18px; }
-    .controls {
-      display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
-    }
+    .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
     .btn {
       background: var(--panel-2); color: var(--txt); border: 1px solid var(--border);
       padding: 10px 16px; border-radius: 10px; cursor: pointer; font-size: 14px;
       display: inline-flex; align-items: center; gap: 6px;
     }
     .btn:hover { border-color: var(--accent); }
-    .btn.primary { background: var(--accent); color: #06251f; font-weight: 600; border-color: var(--accent); }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
     .stage {
       position: relative; background: #000; border-radius: 12px; overflow: hidden;
@@ -73,20 +49,21 @@
     .log {
       font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px;
       background: #0a0e13; border: 1px solid var(--border); border-radius: 8px;
-      padding: 10px; height: 200px; overflow-y: auto; color: #9fb0c3; white-space: pre-wrap;
+      padding: 10px; height: 180px; overflow-y: auto; color: #9fb0c3; white-space: pre-wrap;
     }
-    .params { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 13px; color: var(--muted); }
-    .params div b { color: var(--txt); }
     .switch { display: flex; align-items: center; gap: 8px; font-size: 14px; }
     input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+    .slider { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .slider input { width: 100%; accent-color: var(--accent); }
+    .slider b { color: var(--txt); }
     .hidden { display: none; }
     video, canvas { max-width: 100%; }
   </style>
 </head>
 <body>
   <header>
-    <h1>🛣️ RoadScan <span style="color:var(--muted);font-weight:400">Tespit Motoru</span></h1>
-    <span class="status" id="cvStatus">OpenCV.js yükleniyor…</span>
+    <h1>🛣️ RoadScan <span style="color:var(--muted);font-weight:400">Tespit Motoru · YOLO</span></h1>
+    <span class="status" id="modelStatus">Model yükleniyor…</span>
     <a href="panel.html">Yönetim Paneli →</a>
   </header>
 
@@ -107,11 +84,11 @@
       <div>
         <div class="stage">
           <div id="placeholder">Bir kaynak seçin: fotoğraf, video ya da canlı kamera.<br />
-            Görüntünün alt %50'si yol bölgesi (ROI) olarak işlenir.</div>
+            Eğitilmiş YOLO modeli cihazınızda (offline) çalışır.</div>
           <canvas id="output" class="hidden"></canvas>
         </div>
         <p style="color:var(--muted);font-size:13px;margin-top:10px">
-          📍 Konum: <b id="gpsText">bekleniyor…</b> &nbsp;•&nbsp; Mobil cihazda telefon kamerası kullanılabilir.
+          📍 Konum: <b id="gpsText">bekleniyor…</b> &nbsp;•&nbsp; ⚡ Çıkarım: <b id="backend">—</b> &nbsp;•&nbsp; <b id="fps">0</b> FPS
         </p>
       </div>
 
@@ -125,15 +102,14 @@
         </div>
 
         <div class="card">
-          <h2>Pipeline Parametreleri</h2>
-          <div class="params">
-            <div>ROI: <b>alt %50</b></div>
-            <div>Blur: <b>5×5</b></div>
-            <div>Canny: <b>50 / 150</b></div>
-            <div>Dilation: <b>3×3 ×2</b></div>
-            <div>Min alan: <b>500 px²</b></div>
-            <div>Renk: <b>S/T/K</b></div>
+          <h2>Model Ayarları</h2>
+          <div class="slider">Güven eşiği: <b id="confVal">0.35</b>
+            <input type="range" id="confSlider" min="0.05" max="0.9" step="0.05" value="0.35" />
           </div>
+          <div class="slider">IoU (NMS): <b id="iouVal">0.45</b>
+            <input type="range" id="iouSlider" min="0.1" max="0.9" step="0.05" value="0.45" />
+          </div>
+          <div style="font-size:13px;color:var(--muted)">Model: <b id="modelName" style="color:var(--txt)">YOLOv8n</b> · Giriş: <b id="inputSize" style="color:var(--txt)">640</b></div>
         </div>
 
         <div class="card">
@@ -148,41 +124,31 @@
   <video id="video" class="hidden" playsinline muted></video>
   <img id="srcImg" class="hidden" crossorigin="anonymous" />
   <canvas id="work" class="hidden"></canvas>
+  <canvas id="letterbox" class="hidden"></canvas>
 
+  <!-- ONNX Runtime Web (yerel/offline) -->
+  <script src="vendor/ort/ort.webgpu.min.js"></script>
   <script>
     // ====== Yapılandırma ======
-    const API_BASE = location.origin.startsWith("http")
-      ? location.origin            // backend ile aynı port'tan servis ediliyorsa
-      : "http://localhost:3000";   // dosya olarak açıldıysa varsayılan backend
-
-    // ====== Severity sınıflandırma (kontur alanına göre) ======
-    function classify(area) {
-      if (area >= 5000) return { sev: "Kritik", color: [239, 68, 68] };   // kırmızı
-      if (area >= 2000) return { sev: "Orta", color: [251, 146, 60] };    // turuncu
-      return { sev: "Küçük", color: [250, 204, 21] };                     // sarı
-    }
-    // Güven skoru: 500–8000 px² aralığını 0.0–1.0'a normalize et
-    function confidenceOf(area) {
-      const c = (area - 500) / (8000 - 500);
-      return Math.max(0, Math.min(1, c));
-    }
+    const API_BASE = location.origin.startsWith("http") ? location.origin : "http://localhost:3000";
+    const MODEL_URL = "models/pothole.onnx";
+    const META_URL = "models/model_meta.json";
 
     // ====== Durum ======
-    let cvReady = false;
-    let running = false;
-    let rafId = null;
-    let stream = null;
-    let totalDetections = 0;
-    let sentDetections = 0;
-    let lastGps = null;
-    const recentlySent = new Map(); // anti-spam: koordinat anahtarı → zaman
+    let session = null;
+    let inputSize = 640;
+    let classNames = ["pothole"];
+    let outputName = "output0";
+    let running = false, rafId = null, stream = null, inferring = false;
+    let totalDetections = 0, sentDetections = 0, lastGps = null;
+    let confThres = 0.35, iouThres = 0.45;
+    const recentlySent = new Map();
+    let frameTimes = [];
 
     // ====== DOM ======
     const $ = (id) => document.getElementById(id);
-    const output = $("output");
-    const work = $("work");
-    const video = $("video");
-    const srcImg = $("srcImg");
+    const output = $("output"), work = $("work"), letterbox = $("letterbox");
+    const video = $("video"), srcImg = $("srcImg");
 
     function logLine(msg) {
       const el = $("log");
@@ -190,150 +156,209 @@
       el.textContent = `[${t}] ${msg}\n` + el.textContent;
     }
 
+    // ====== Severity: kutu alanının kareye oranına göre ======
+    function classify(boxW, boxH, frameW, frameH) {
+      const ratio = (boxW * boxH) / (frameW * frameH);
+      if (ratio >= 0.06) return { sev: "Kritik", color: [239, 68, 68] };
+      if (ratio >= 0.02) return { sev: "Orta", color: [251, 146, 60] };
+      return { sev: "Küçük", color: [250, 204, 21] };
+    }
+
     // ====== GPS ======
     function startGps() {
-      if (!navigator.geolocation) {
-        $("gpsText").textContent = "tarayıcı desteklemiyor";
-        return;
-      }
+      if (!navigator.geolocation) { $("gpsText").textContent = "tarayıcı desteklemiyor"; return; }
       navigator.geolocation.watchPosition(
         (pos) => {
           lastGps = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           $("gpsText").textContent = `${lastGps.lat.toFixed(5)}, ${lastGps.lng.toFixed(5)}`;
         },
-        () => { $("gpsText").textContent = "izin verilmedi (varsayılan İstanbul)"; },
+        () => { $("gpsText").textContent = "izin yok (varsayılan İstanbul)"; },
         { enableHighAccuracy: true, maximumAge: 5000 }
       );
     }
 
-    // ====== OpenCV pipeline — tek kare işle ======
-    function processFrame(srcCanvas) {
-      const w = srcCanvas.width, h = srcCanvas.height;
-      const src = cv.imread(srcCanvas);
+    // ====== Model yükle ======
+    async function loadModel() {
+      try {
+        // Çalışma zamanı dosyaları yerel klasörden (offline)
+        ort.env.wasm.wasmPaths = "vendor/ort/";
+        // Meta (sınıf isimleri, giriş boyutu) — varsa
+        try {
+          const m = await (await fetch(META_URL)).json();
+          if (m.input_size) inputSize = m.input_size;
+          if (m.names) classNames = Array.isArray(m.names) ? m.names : Object.values(m.names);
+        } catch { /* meta yoksa varsayılanlar */ }
 
-      // 1) ROI: alt %50 (yol bölgesi)
-      const roiY = Math.floor(h / 2);
-      const roiRect = new cv.Rect(0, roiY, w, h - roiY);
-      const roi = src.roi(roiRect);
-
-      // 2) Gri tonlama
-      const gray = new cv.Mat();
-      cv.cvtColor(roi, gray, cv.COLOR_RGBA2GRAY);
-
-      // 3) Gaussian Blur 5×5
-      const blur = new cv.Mat();
-      cv.GaussianBlur(gray, blur, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
-
-      // 4) Canny kenar tespiti (50, 150)
-      const edges = new cv.Mat();
-      cv.Canny(blur, edges, 50, 150, 3, false);
-
-      // 5) Morfolojik dilation 3×3, 2 iterasyon
-      const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
-      const dil = new cv.Mat();
-      cv.dilate(edges, dil, kernel, new cv.Point(-1, -1), 2);
-
-      // 6) Konturları bul
-      const contours = new cv.MatVector();
-      const hierarchy = new cv.Mat();
-      cv.findContours(dil, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-      // Çıktı tuvaline orijinali çiz
-      output.width = w; output.height = h;
-      const octx = output.getContext("2d");
-      octx.drawImage(srcCanvas, 0, 0, w, h);
-
-      const detections = [];
-      for (let i = 0; i < contours.size(); i++) {
-        const cnt = contours.get(i);
-        const area = cv.contourArea(cnt);
-        if (area >= 500) {
-          const r = cv.boundingRect(cnt);
-          const { sev, color } = classify(area);
-          // ROI offset'i geri ekle (kutuyu tam görüntüye göre konumla)
-          const box = { x: r.x, y: r.y + roiY, w: r.width, h: r.height };
-          detections.push({ area, sev, color, box, confidence: confidenceOf(area) });
+        let backend = "wasm";
+        try {
+          session = await ort.InferenceSession.create(MODEL_URL, { executionProviders: ["webgpu"] });
+          backend = "webgpu";
+        } catch (e) {
+          session = await ort.InferenceSession.create(MODEL_URL, { executionProviders: ["wasm"] });
+          backend = "wasm";
         }
-        cnt.delete();
-      }
+        outputName = session.outputNames[0];
 
-      // 7) Bounding box + etiket çiz
-      octx.lineWidth = 3;
-      octx.font = "bold 14px system-ui";
+        $("backend").textContent = backend.toUpperCase();
+        $("inputSize").textContent = inputSize;
+        $("modelStatus").textContent = "Model hazır ✔";
+        $("modelStatus").style.color = "var(--accent)";
+        ["photoBtn", "videoBtn", "webcamBtn"].forEach((id) => ($(id).disabled = false));
+        logLine(`Model yüklendi (${backend}). Sınıflar: ${classNames.join(", ")}. Bir kaynak seçin.`);
+      } catch (err) {
+        $("modelStatus").textContent = "⚠️ Model yüklenemedi";
+        $("modelStatus").style.color = "var(--kirmizi)";
+        logLine("✖ Model yüklenemedi: " + err.message + " — models/pothole.onnx var mı? (önce modeli eğitip export edin)");
+      }
+    }
+
+    // ====== Ön işleme: letterbox → Float32 NCHW ======
+    function preprocess(srcCanvas) {
+      const W = srcCanvas.width, H = srcCanvas.height;
+      const scale = Math.min(inputSize / W, inputSize / H);
+      const newW = Math.round(W * scale), newH = Math.round(H * scale);
+      const padX = (inputSize - newW) / 2, padY = (inputSize - newH) / 2;
+
+      letterbox.width = inputSize; letterbox.height = inputSize;
+      const lctx = letterbox.getContext("2d");
+      lctx.fillStyle = "#727272"; // gri dolgu (114,114,114 ~)
+      lctx.fillRect(0, 0, inputSize, inputSize);
+      lctx.drawImage(srcCanvas, 0, 0, W, H, padX, padY, newW, newH);
+
+      const img = lctx.getImageData(0, 0, inputSize, inputSize).data;
+      const area = inputSize * inputSize;
+      const data = new Float32Array(area * 3);
+      for (let i = 0; i < area; i++) {
+        data[i] = img[i * 4] / 255;                 // R
+        data[i + area] = img[i * 4 + 1] / 255;      // G
+        data[i + area * 2] = img[i * 4 + 2] / 255;  // B
+      }
+      return { tensor: new ort.Tensor("float32", data, [1, 3, inputSize, inputSize]), scale, padX, padY, W, H };
+    }
+
+    // ====== Son işleme: YOLOv8 çıktısı → kutular + NMS ======
+    function postprocess(out, pp) {
+      const dims = out.dims;            // [1, 4+nc, N]
+      const nc = dims[1] - 4;
+      const N = dims[2];
+      const d = out.data;
+      const boxes = [];
+      for (let a = 0; a < N; a++) {
+        // en yüksek skorlu sınıf
+        let best = 0, bestC = 0;
+        for (let c = 0; c < nc; c++) {
+          const s = d[(4 + c) * N + a];
+          if (s > best) { best = s; bestC = c; }
+        }
+        if (best < confThres) continue;
+        const cx = d[a], cy = d[N + a], w = d[2 * N + a], h = d[3 * N + a];
+        // letterbox geri ölçekle → orijinal görüntü koordinatları
+        const x = (cx - w / 2 - pp.padX) / pp.scale;
+        const y = (cy - h / 2 - pp.padY) / pp.scale;
+        const bw = w / pp.scale, bh = h / pp.scale;
+        boxes.push({ x, y, w: bw, h: bh, score: best, cls: bestC });
+      }
+      return nms(boxes, iouThres);
+    }
+
+    function iou(a, b) {
+      const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+      const x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
+      const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+      const uni = a.w * a.h + b.w * b.h - inter;
+      return uni <= 0 ? 0 : inter / uni;
+    }
+    function nms(boxes, thres) {
+      boxes.sort((a, b) => b.score - a.score);
+      const keep = [];
+      while (boxes.length) {
+        const cur = boxes.shift();
+        keep.push(cur);
+        boxes = boxes.filter((b) => iou(cur, b) < thres);
+      }
+      return keep;
+    }
+
+    // ====== Tek kare: çıkarım + çizim + rapor ======
+    async function detectFrame(srcCanvas) {
+      const t0 = performance.now();
+      const pp = preprocess(srcCanvas);
+      const results = await session.run({ [session.inputNames[0]]: pp.tensor });
+      const raw = postprocess(results[outputName], pp);
+
+      // Çıktı tuvaline çiz
+      const W = srcCanvas.width, H = srcCanvas.height;
+      output.width = W; output.height = H;
+      const octx = output.getContext("2d");
+      octx.drawImage(srcCanvas, 0, 0, W, H);
+
+      const detections = raw.map((b) => {
+        const { sev, color } = classify(b.w, b.h, W, H);
+        return { box: { x: b.x, y: b.y, w: b.w, h: b.h }, sev, color, confidence: b.score, cls: b.cls };
+      });
+
+      octx.lineWidth = Math.max(2, Math.round(W / 400));
+      octx.font = `bold ${Math.max(13, Math.round(W / 60))}px system-ui`;
       octx.textBaseline = "bottom";
-      for (const d of detections) {
-        const [rr, gg, bb] = d.color;
-        octx.strokeStyle = `rgb(${rr},${gg},${bb})`;
-        octx.fillStyle = `rgb(${rr},${gg},${bb})`;
-        octx.strokeRect(d.box.x, d.box.y, d.box.w, d.box.h);
-        const label = `${d.sev} ${(d.confidence * 100).toFixed(0)}%`;
+      for (const dt of detections) {
+        const [r, g, bl] = dt.color;
+        octx.strokeStyle = `rgb(${r},${g},${bl})`;
+        octx.fillStyle = `rgb(${r},${g},${bl})`;
+        octx.strokeRect(dt.box.x, dt.box.y, dt.box.w, dt.box.h);
+        const label = `${dt.sev} ${(dt.confidence * 100).toFixed(0)}%`;
         const tw = octx.measureText(label).width + 10;
-        octx.fillRect(d.box.x, d.box.y - 20, tw, 20);
-        octx.fillStyle = d.sev === "Kritik" ? "#fff" : "#111";
-        octx.fillText(label, d.box.x + 5, d.box.y - 4);
+        const lh = parseInt(octx.font) + 6;
+        octx.fillRect(dt.box.x, dt.box.y - lh, tw, lh);
+        octx.fillStyle = dt.sev === "Kritik" ? "#fff" : "#111";
+        octx.fillText(label, dt.box.x + 5, dt.box.y - 4);
       }
 
-      // ROI sınır çizgisi (görsel ipucu)
-      octx.strokeStyle = "rgba(45,212,191,.6)";
-      octx.lineWidth = 1;
-      octx.setLineDash([6, 6]);
-      octx.beginPath(); octx.moveTo(0, roiY); octx.lineTo(w, roiY); octx.stroke();
-      octx.setLineDash([]);
+      // FPS
+      const t1 = performance.now();
+      frameTimes.push(t1 - t0);
+      if (frameTimes.length > 20) frameTimes.shift();
+      const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+      $("fps").textContent = (1000 / avg).toFixed(1);
 
-      // Temizlik
-      src.delete(); roi.delete(); gray.delete(); blur.delete();
-      edges.delete(); dil.delete(); kernel.delete();
-      contours.delete(); hierarchy.delete();
-
+      reportDetections(detections);
       return detections;
     }
 
-    // ====== Tespitleri raporla (snapshot + POST) ======
+    // ====== Raporla (snapshot + POST) ======
     function reportDetections(detections) {
       $("curCount").textContent = detections.length;
       if (detections.length === 0) return;
-
       totalDetections += detections.length;
       $("totalCount").textContent = totalDetections;
 
-      // En kritik (en büyük alan) tespiti raporla
-      const top = detections.reduce((a, b) => (b.area > a.area ? b : a));
+      const top = detections.reduce((a, b) => (b.confidence > a.confidence ? b : a));
       $("lastSev").innerHTML = `<span class="badge ${top.sev}">${top.sev}</span>`;
-
       if (!$("autoSend").checked) return;
 
-      // Anti-spam: aynı koordinat ızgarasından 8 sn'de bir gönder
-      const gps = lastGps || { lat: 41.0082, lng: 28.9784 }; // varsayılan İstanbul
+      const gps = lastGps || { lat: 41.0082, lng: 28.9784 };
       const key = `${gps.lat.toFixed(4)},${gps.lng.toFixed(4)},${top.sev}`;
       const now = Date.now();
       if (recentlySent.has(key) && now - recentlySent.get(key) < 8000) return;
       recentlySent.set(key, now);
 
-      // Snapshot: o anki kareyi JPEG base64'e çevir
       const image = output.toDataURL("image/jpeg", 0.7);
       const payload = {
-        lat: gps.lat,
-        lng: gps.lng,
+        lat: gps.lat, lng: gps.lng,
         timestamp: new Date().toISOString(),
         severity: top.sev,
         confidence: Number(top.confidence.toFixed(2)),
         image,
       };
-
       fetch(`${API_BASE}/api/detections`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
         .then((r) => r.json())
         .then((j) => {
           if (j.success) {
-            sentDetections++;
-            $("sentCount").textContent = sentDetections;
+            sentDetections++; $("sentCount").textContent = sentDetections;
             logLine(`✔ #${j.id} kaydedildi — ${top.sev} (${(top.confidence * 100).toFixed(0)}%) @ ${gps.lat.toFixed(4)},${gps.lng.toFixed(4)}`);
-          } else {
-            logLine(`✖ Gönderim hatası: ${j.error || "?"}`);
-          }
+          } else logLine(`✖ Gönderim hatası: ${j.error || "?"}`);
         })
         .catch(() => logLine("✖ Sunucuya ulaşılamadı (backend çalışıyor mu?)"));
     }
@@ -341,17 +366,14 @@
     // ====== Kaynak: Fotoğraf ======
     $("photoBtn").onclick = () => $("photoInput").click();
     $("photoInput").onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+      const file = e.target.files[0]; if (!file) return;
       stopAll();
-      srcImg.onload = () => {
-        work.width = srcImg.naturalWidth;
-        work.height = srcImg.naturalHeight;
+      srcImg.onload = async () => {
+        work.width = srcImg.naturalWidth; work.height = srcImg.naturalHeight;
         work.getContext("2d").drawImage(srcImg, 0, 0);
         showStage();
-        const dets = processFrame(work);
-        reportDetections(dets);
-        logLine(`Fotoğraf işlendi — ${dets.length} anomali bulundu.`);
+        const dets = await detectFrame(work);
+        logLine(`Fotoğraf işlendi — ${dets.length} çukur bulundu.`);
       };
       srcImg.src = URL.createObjectURL(file);
     };
@@ -359,48 +381,32 @@
     // ====== Kaynak: Video ======
     $("videoBtn").onclick = () => $("videoInput").click();
     $("videoInput").onchange = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+      const file = e.target.files[0]; if (!file) return;
       stopAll();
-      video.srcObject = null;
-      video.src = URL.createObjectURL(file);
-      video.loop = false;
-      video.play();
-      showStage();
-      running = true;
-      $("stopBtn").disabled = false;
-      logLine("Video işleniyor…");
-      loopVideo();
+      video.srcObject = null; video.src = URL.createObjectURL(file); video.loop = false;
+      video.play(); showStage(); running = true; $("stopBtn").disabled = false;
+      logLine("Video işleniyor…"); loopVideo();
     };
 
     // ====== Kaynak: Webcam ======
     $("webcamBtn").onclick = async () => {
       stopAll();
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }, audio: false,
-        });
-        video.srcObject = stream;
-        video.src = "";
-        await video.play();
-        showStage();
-        running = true;
-        $("stopBtn").disabled = false;
-        logLine("Canlı kamera başladı.");
-        loopVideo();
-      } catch (err) {
-        logLine("✖ Kameraya erişilemedi: " + err.message);
-      }
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        video.srcObject = stream; video.src = "";
+        await video.play(); showStage(); running = true; $("stopBtn").disabled = false;
+        logLine("Canlı kamera başladı."); loopVideo();
+      } catch (err) { logLine("✖ Kameraya erişilemedi: " + err.message); }
     };
 
-    function loopVideo() {
+    async function loopVideo() {
       if (!running) return;
-      if (video.readyState >= 2 && video.videoWidth) {
-        work.width = video.videoWidth;
-        work.height = video.videoHeight;
+      if (!inferring && video.readyState >= 2 && video.videoWidth) {
+        inferring = true;
+        work.width = video.videoWidth; work.height = video.videoHeight;
         work.getContext("2d").drawImage(video, 0, 0, work.width, work.height);
-        const dets = processFrame(work);
-        reportDetections(dets);
+        try { await detectFrame(work); } catch (e) { logLine("✖ Çıkarım hatası: " + e.message); }
+        inferring = false;
       }
       if (video.ended) { stopAll(); logLine("Video bitti."); return; }
       rafId = requestAnimationFrame(loopVideo);
@@ -414,27 +420,15 @@
       try { video.pause(); } catch {}
       $("stopBtn").disabled = true;
     }
+    function showStage() { $("placeholder").classList.add("hidden"); output.classList.remove("hidden"); }
 
-    function showStage() {
-      $("placeholder").classList.add("hidden");
-      output.classList.remove("hidden");
-    }
+    // ====== Ayar sliderları ======
+    $("confSlider").oninput = (e) => { confThres = parseFloat(e.target.value); $("confVal").textContent = confThres.toFixed(2); };
+    $("iouSlider").oninput = (e) => { iouThres = parseFloat(e.target.value); $("iouVal").textContent = iouThres.toFixed(2); };
 
-    // ====== OpenCV.js hazır olunca ======
-    function onCvReady() {
-      cvReady = true;
-      $("cvStatus").textContent = "OpenCV.js hazır ✔";
-      ["photoBtn", "videoBtn", "webcamBtn"].forEach((id) => ($(id).disabled = false));
-      logLine("OpenCV.js yüklendi. Bir kaynak seçin.");
-    }
-
+    // ====== Başlat ======
     startGps();
+    loadModel();
   </script>
-
-  <!-- OpenCV.js (CDN) — yüklenince Module.onRuntimeInitialized tetiklenir -->
-  <script>
-    var Module = { onRuntimeInitialized() { onCvReady(); } };
-  </script>
-  <script async src="https://docs.opencv.org/4.10.0/opencv.js" type="text/javascript"></script>
 </body>
 </html>
