@@ -180,8 +180,12 @@
     // ====== Model yükle ======
     async function loadModel() {
       try {
-        // Çalışma zamanı dosyaları yerel klasörden (offline)
-        ort.env.wasm.wasmPaths = "vendor/ort/";
+        // Çalışma zamanı dosyaları yerel klasörden (offline).
+        // MUTLAK URL şart: dinamik import() bare specifier'ı ('vendor/ort/') reddeder.
+        ort.env.wasm.wasmPaths = new URL("vendor/ort/", location.href).href;
+        // Tek iş parçacığı: SharedArrayBuffer / cross-origin izolasyon GEREKMEZ
+        ort.env.wasm.numThreads = 1;
+        ort.env.wasm.proxy = false;
         // Meta (sınıf isimleri, giriş boyutu) — varsa
         try {
           const m = await (await fetch(META_URL)).json();
@@ -189,12 +193,19 @@
           if (m.names) classNames = Array.isArray(m.names) ? m.names : Object.values(m.names);
         } catch { /* meta yoksa varsayılanlar */ }
 
+        // Modeli önce indir (ArrayBuffer) — net hata mesajı için
+        const resp = await fetch(MODEL_URL);
+        if (!resp.ok) throw new Error(`model indirilemedi: HTTP ${resp.status}`);
+        const modelBuf = new Uint8Array(await resp.arrayBuffer());
+        logLine(`Model dosyası indirildi (${(modelBuf.length / 1e6).toFixed(1)} MB), çalışma zamanı başlatılıyor…`);
+
         let backend = "wasm";
         try {
-          session = await ort.InferenceSession.create(MODEL_URL, { executionProviders: ["webgpu"] });
+          session = await ort.InferenceSession.create(modelBuf, { executionProviders: ["webgpu"] });
           backend = "webgpu";
         } catch (e) {
-          session = await ort.InferenceSession.create(MODEL_URL, { executionProviders: ["wasm"] });
+          logLine("WebGPU kullanılamadı (" + (e.message || e) + "), WASM'a geçiliyor…");
+          session = await ort.InferenceSession.create(modelBuf, { executionProviders: ["wasm"] });
           backend = "wasm";
         }
         outputName = session.outputNames[0];
@@ -208,7 +219,8 @@
       } catch (err) {
         $("modelStatus").textContent = "⚠️ Model yüklenemedi";
         $("modelStatus").style.color = "var(--kirmizi)";
-        logLine("✖ Model yüklenemedi: " + err.message + " — models/pothole.onnx var mı? (önce modeli eğitip export edin)");
+        logLine("✖ Model yüklenemedi: " + (err && err.message ? err.message : err));
+        console.error("RoadScan model yükleme hatası:", err);
       }
     }
 
