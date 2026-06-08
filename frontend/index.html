@@ -35,8 +35,9 @@
     .grid { display:grid; grid-template-columns:1.7fr 1fr; gap:18px; align-items:start; }
     @media (max-width:860px){ .grid { grid-template-columns:1fr; } }
     .stage { position:relative; background:#000; border-radius:14px; overflow:hidden; border:1px solid var(--border);
-      min-height:260px; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,.4); }
-    #output { width:100%; display:block; }
+      height:clamp(320px, 60vh, 660px); display:flex; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,.4); }
+    /* Sabit izleme kutusu: kaynak çözünürlüğü ne olursa olsun boyut değişmez, oran bozulmaz */
+    #output { width:100%; height:100%; object-fit:contain; display:block; }
     #placeholder { color:var(--muted); padding:60px 24px; text-align:center; line-height:1.7; }
     #placeholder .big { font-size:42px; display:block; margin-bottom:8px; }
     .infobar { color:var(--muted); font-size:13px; margin-top:12px; display:flex; gap:18px; flex-wrap:wrap; align-items:center; }
