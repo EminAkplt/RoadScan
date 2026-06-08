@@ -107,9 +107,8 @@
           <span><b id="fps">0</b> FPS</span>
         </div>
         <div class="legend">
-          <span style="color:var(--sari)">Küçük</span>
-          <span style="color:var(--turuncu)">Orta</span>
-          <span style="color:var(--kirmizi)">Kritik</span>
+          <span style="color:var(--kirmizi)">Kritik — yolculuğa engel</span>
+          <span style="color:var(--turuncu)">Orta — sorun olabilir</span>
         </div>
       </div>
 
@@ -133,27 +132,12 @@
         </div>
 
         <div class="card">
-          <h2>Tespit Ayarları</h2>
-          <div class="slider">Tespit güven eşiği: <b id="confVal">0.35</b>
-            <input type="range" id="confSlider" min="0.05" max="0.9" step="0.05" value="0.35" /></div>
-          <div class="slider">IoU (NMS): <b id="iouVal">0.45</b>
-            <input type="range" id="iouSlider" min="0.1" max="0.9" step="0.05" value="0.45" /></div>
-          <div style="font-size:13px;color:var(--muted)">Model: <b id="modelName" style="color:var(--txt)">YOLOv8 · Yol Hasarı</b> · Giriş: <b id="inputSize" style="color:var(--txt)">640</b></div>
-        </div>
-
-        <div class="card">
-          <h2>Raporlama (DB'yi şişirme)</h2>
-          <div class="slider">Raporlama güven eşiği: <b id="reportVal">0.55</b>
-            <input type="range" id="reportSlider" min="0.3" max="0.95" step="0.05" value="0.55" /></div>
-          <div class="slider">Kalıcılık (kaç karede görülmeli): <b id="persistVal">3</b>
-            <input type="range" id="persistSlider" min="1" max="10" step="1" value="3" /></div>
-          <div style="margin-bottom:4px;font-size:13px;color:var(--muted)">Sadece şunu raporla:</div>
-          <select id="minSev" style="width:100%;background:var(--panel2);color:var(--txt);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px">
-            <option value="Küçük">Tüm seviyeler</option>
-            <option value="Orta" selected>Orta ve üstü</option>
-            <option value="Kritik">Sadece Kritik</option>
-          </select>
-          <div style="font-size:12px;color:var(--muted);margin-top:8px">Aynı bozukluk videoda kareler boyunca takip edilir → <b style="color:var(--txt)">tek kayıt</b>.</div>
+          <h2>Tespit & Raporlama</h2>
+          <div style="font-size:13px;color:var(--muted);line-height:1.6">Hassasiyet <b style="color:var(--txt)">otomatik ayarlı</b> — yalnızca <b style="color:var(--txt)">yolculuğu etkileyen</b> bozukluklar raporlanır:</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><span class="badge Kritik">Kritik</span> yolculuğa engel olan/olacak</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px"><span class="badge Orta">Orta</span> engel değil ama sorun olabilir</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:10px">Ufak tefek çatlaklar elenir · aynı bozukluk videoda takip edilip <b style="color:var(--txt)">tek kayıt</b> olur.</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:10px">Model: <b id="modelName" style="color:var(--txt)">YOLOv8 · Yol Hasarı</b> · Giriş: <b id="inputSize" style="color:var(--txt)">640</b></div>
         </div>
 
         <div class="card">
@@ -191,11 +175,22 @@
     let session = null, inputSize = 640, classNames = [], outputName = "output0";
     let running = false, rafId = null, stream = null, inferring = false;
     let totalDetections = 0, sentDetections = 0, lastGps = null;
-    let confThres = 0.35, iouThres = 0.45;
-    // Raporlama ayarları (DB'yi şişirmemek için tespitten ayrı)
-    let reportConf = 0.55, persistFrames = 3, minSeverity = "Orta";
+    // === SABİT AYARLAR — son kullanıcıya kapalı, tamamı önceden ayarlı ===
+    const DET_CONF = 0.30;        // model kutu üretim eşiği (ham tespit)
+    const IOU_NMS = 0.45;         // NMS örtüşme eşiği
+    const REPORT_CONF = 0.50;     // raporlama için min güven
+    const PERSIST_FRAMES = 3;     // videoda kaç ardışık karede görülmeli
+    const LOST_AFTER = 15;        // iz kaç karede kaybolmuş sayılır
+    // Tür bazında alan-oranı eşikleri (kutu alanı / kare alanı):
+    //   ratio < ignore  → ufak tefek, raporlama dışı (hiç gösterilmez)
+    //   ratio >= kritik → Kritik (yolculuğa engel),  arası → Orta (sorun olabilir)
+    const SEV_RULES = {
+      "Potholes":           { ignore: 0.0045, kritik: 0.013 }, // çukur: en tehlikeli, küçükken bile kritik olabilir
+      "Alligator Crack":    { ignore: 0.012,  kritik: 0.045 }, // timsah sırtı: geniş yüzey bozulması
+      "Longitudinal Crack": { ignore: 0.016,  kritik: 0.055 }, // boyuna çatlak: ancak belirginse
+      "Transverse Crack":   { ignore: 0.016,  kritik: 0.055 }, // enine çatlak: ancak belirginse
+    };
     let tracks = [], frameNo = 0;          // kare-arası takip → aynı bozukluk = tek kayıt
-    const SEV_RANK = { "Küçük": 1, "Orta": 2, "Kritik": 3 };
     const typeCounts = {};
     let frameTimes = [];
 
@@ -207,12 +202,13 @@
       el.textContent = `[${new Date().toLocaleTimeString("tr-TR")}] ${msg}\n` + el.textContent;
     }
 
-    // ====== Severity: kutu alanı / kare oranı ======
-    function classify(boxW, boxH, frameW, frameH) {
-      const ratio = (boxW * boxH) / (frameW * frameH);
-      if (ratio >= 0.06) return { sev: "Kritik", color: [239, 68, 68] };
-      if (ratio >= 0.02) return { sev: "Orta", color: [251, 146, 60] };
-      return { sev: "Küçük", color: [250, 204, 21] };
+    // ====== Severity: türe + boyuta göre yolculuk etkisi (null = ufak, ele) ======
+    function severityFor(en, ratio) {
+      const r = SEV_RULES[en] || { ignore: 0.012, kritik: 0.045 };
+      if (ratio < r.ignore) return null;                          // ufak tefek → raporlanmaz/gösterilmez
+      return ratio >= r.kritik
+        ? { sev: "Kritik", color: [239, 68, 68] }                 // yolculuğa engel
+        : { sev: "Orta", color: [251, 146, 60] };                 // sorun olabilir
     }
 
     // ====== GPS ======
@@ -291,12 +287,12 @@
       for (let a = 0; a < N; a++) {
         let best = 0, bestC = 0;
         for (let c = 0; c < nc; c++) { const s = d[(4 + c) * N + a]; if (s > best) { best = s; bestC = c; } }
-        if (best < confThres) continue;
+        if (best < DET_CONF) continue;
         const cx = d[a], cy = d[N + a], w = d[2 * N + a], h = d[3 * N + a];
         const x = (cx - w / 2 - pp.padX) / pp.scale, y = (cy - h / 2 - pp.padY) / pp.scale;
         boxes.push({ x, y, w: w / pp.scale, h: h / pp.scale, score: best, cls: bestC });
       }
-      return nms(boxes, iouThres);
+      return nms(boxes, IOU_NMS);
     }
     function iou(a, b) {
       const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
@@ -336,11 +332,13 @@
       const octx = output.getContext("2d");
       octx.drawImage(srcCanvas, 0, 0, W, H);
 
-      const detections = raw.map((b) => {
-        const { sev, color } = classify(b.w, b.h, W, H);
+      const detections = [];
+      for (const b of raw) {
         const en = classNames[b.cls] || "?";
-        return { box: { x: b.x, y: b.y, w: b.w, h: b.h }, sev, color, confidence: b.score, en, tr: trLabel(en) };
-      });
+        const sv = severityFor(en, (b.w * b.h) / (W * H));
+        if (!sv) continue; // ufak tefek bozukluk → hiç gösterme/raporlama
+        detections.push({ box: { x: b.x, y: b.y, w: b.w, h: b.h }, sev: sv.sev, color: sv.color, confidence: b.score, en, tr: trLabel(en) });
+      }
 
       octx.lineWidth = Math.max(2, Math.round(W / 380));
       octx.font = `bold ${Math.max(13, Math.round(W / 55))}px system-ui`;
@@ -367,8 +365,6 @@
     }
 
     // ====== Raporlama mantığı (DB'yi şişirmeden) ======
-    const sevPass = (sev) => SEV_RANK[sev] >= SEV_RANK[minSeverity];
-
     function showCur(dets) {
       $("curCount").textContent = dets.length;
       if (!dets.length) return;
@@ -392,14 +388,14 @@
       dets.forEach((d, i) => { if (used.has(i)) return;
         tracks.push({ en: d.en, tr: d.tr, box: d.box, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box), frames: 1, lastSeen: frameNo, reported: false }); });
       for (const t of tracks)
-        if (!t.reported && t.frames >= persistFrames && t.conf >= reportConf && sevPass(t.sev)) { t.reported = true; doReport(t); }
-      tracks = tracks.filter((t) => frameNo - t.lastSeen <= 15); // kayıp izleri temizle
+        if (!t.reported && t.frames >= PERSIST_FRAMES && t.conf >= REPORT_CONF) { t.reported = true; doReport(t); }
+      tracks = tracks.filter((t) => frameNo - t.lastSeen <= LOST_AFTER); // kayıp izleri temizle
     }
 
     // FOTOĞRAF: tek kare, takip yok — eşiği geçenleri doğrudan raporla
     function reportImmediate(dets, src) {
       showCur(dets);
-      dets.filter((d) => d.confidence >= reportConf && sevPass(d.sev))
+      dets.filter((d) => d.confidence >= REPORT_CONF)
         .forEach((d) => doReport({ en: d.en, tr: d.tr, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box) }));
     }
 
@@ -482,12 +478,6 @@
       $("stopBtn").disabled = true;
     }
     function showStage() { $("placeholder").classList.add("hidden"); output.classList.remove("hidden"); }
-
-    $("confSlider").oninput = (e) => { confThres = parseFloat(e.target.value); $("confVal").textContent = confThres.toFixed(2); };
-    $("iouSlider").oninput = (e) => { iouThres = parseFloat(e.target.value); $("iouVal").textContent = iouThres.toFixed(2); };
-    $("reportSlider").oninput = (e) => { reportConf = parseFloat(e.target.value); $("reportVal").textContent = reportConf.toFixed(2); };
-    $("persistSlider").oninput = (e) => { persistFrames = parseInt(e.target.value, 10); $("persistVal").textContent = persistFrames; };
-    $("minSev").onchange = (e) => { minSeverity = e.target.value; };
 
     startGps(); loadModel();
   </script>
