@@ -131,12 +131,27 @@
         </div>
 
         <div class="card">
-          <h2>Model Ayarları</h2>
-          <div class="slider">Güven eşiği: <b id="confVal">0.35</b>
+          <h2>Tespit Ayarları</h2>
+          <div class="slider">Tespit güven eşiği: <b id="confVal">0.35</b>
             <input type="range" id="confSlider" min="0.05" max="0.9" step="0.05" value="0.35" /></div>
           <div class="slider">IoU (NMS): <b id="iouVal">0.45</b>
             <input type="range" id="iouSlider" min="0.1" max="0.9" step="0.05" value="0.45" /></div>
           <div style="font-size:13px;color:var(--muted)">Model: <b id="modelName" style="color:var(--txt)">YOLOv8 · Yol Hasarı</b> · Giriş: <b id="inputSize" style="color:var(--txt)">640</b></div>
+        </div>
+
+        <div class="card">
+          <h2>Raporlama (DB'yi şişirme)</h2>
+          <div class="slider">Raporlama güven eşiği: <b id="reportVal">0.55</b>
+            <input type="range" id="reportSlider" min="0.3" max="0.95" step="0.05" value="0.55" /></div>
+          <div class="slider">Kalıcılık (kaç karede görülmeli): <b id="persistVal">3</b>
+            <input type="range" id="persistSlider" min="1" max="10" step="1" value="3" /></div>
+          <div style="margin-bottom:4px;font-size:13px;color:var(--muted)">Sadece şunu raporla:</div>
+          <select id="minSev" style="width:100%;background:var(--panel2);color:var(--txt);border:1px solid var(--border);border-radius:9px;padding:8px 10px;font-size:13px">
+            <option value="Küçük">Tüm seviyeler</option>
+            <option value="Orta" selected>Orta ve üstü</option>
+            <option value="Kritik">Sadece Kritik</option>
+          </select>
+          <div style="font-size:12px;color:var(--muted);margin-top:8px">Aynı bozukluk videoda kareler boyunca takip edilir → <b style="color:var(--txt)">tek kayıt</b>.</div>
         </div>
 
         <div class="card">
@@ -175,7 +190,10 @@
     let running = false, rafId = null, stream = null, inferring = false;
     let totalDetections = 0, sentDetections = 0, lastGps = null;
     let confThres = 0.35, iouThres = 0.45;
-    const recentlySent = new Map();
+    // Raporlama ayarları (DB'yi şişirmemek için tespitten ayrı)
+    let reportConf = 0.55, persistFrames = 3, minSeverity = "Orta";
+    let tracks = [], frameNo = 0;          // kare-arası takip → aynı bozukluk = tek kayıt
+    const SEV_RANK = { "Küçük": 1, "Orta": 2, "Kritik": 3 };
     const typeCounts = {};
     let frameTimes = [];
 
@@ -305,7 +323,7 @@
     }
 
     // ====== Tek kare: çıkarım + çizim + rapor ======
-    async function detectFrame(srcCanvas) {
+    async function detectFrame(srcCanvas, isVideo = true) {
       const t0 = performance.now();
       const pp = preprocess(srcCanvas);
       const results = await session.run({ [session.inputNames[0]]: pp.tensor });
@@ -341,39 +359,62 @@
       frameTimes.push(t1 - t0); if (frameTimes.length > 20) frameTimes.shift();
       $("fps").textContent = (1000 / (frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length)).toFixed(1);
 
-      reportDetections(detections, srcCanvas);
+      if (isVideo) updateTracks(detections, srcCanvas);
+      else reportImmediate(detections, srcCanvas);
       return detections;
     }
 
-    // ====== Raporla (kırp + snapshot + POST) ======
-    function reportDetections(detections, srcCanvas) {
-      $("curCount").textContent = detections.length;
-      if (detections.length === 0) return;
-      totalDetections += detections.length; $("totalCount").textContent = totalDetections;
+    // ====== Raporlama mantığı (DB'yi şişirmeden) ======
+    const sevPass = (sev) => SEV_RANK[sev] >= SEV_RANK[minSeverity];
 
-      const top = detections.reduce((a, b) => (b.confidence > a.confidence ? b : a));
+    function showCur(dets) {
+      $("curCount").textContent = dets.length;
+      if (!dets.length) return;
+      totalDetections += dets.length; $("totalCount").textContent = totalDetections;
+      const top = dets.reduce((a, b) => (b.confidence > a.confidence ? b : a));
       $("lastType").innerHTML = `${trIcon(top.en)} ${top.tr} <span class="badge ${top.sev}">${top.sev}</span>`;
+    }
+
+    // VIDEO/KAMERA: kare-arası IoU takibi → aynı fiziksel bozukluk tek kez raporlanır
+    function updateTracks(dets, src) {
+      frameNo++; showCur(dets);
+      const used = new Set();
+      for (const t of tracks) {
+        let bi = -1, best = 0.3;
+        dets.forEach((d, i) => { if (used.has(i) || d.en !== t.en) return;
+          const v = iou(t.box, d.box); if (v > best) { best = v; bi = i; } });
+        if (bi >= 0) { used.add(bi); const d = dets[bi];
+          t.box = d.box; t.lastSeen = frameNo; t.frames++;
+          if (d.confidence > t.conf) { t.conf = d.confidence; t.sev = d.sev; t.tr = d.tr; t.en = d.en; t.crop = cropBox(src, d.box); } }
+      }
+      dets.forEach((d, i) => { if (used.has(i)) return;
+        tracks.push({ en: d.en, tr: d.tr, box: d.box, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box), frames: 1, lastSeen: frameNo, reported: false }); });
+      for (const t of tracks)
+        if (!t.reported && t.frames >= persistFrames && t.conf >= reportConf && sevPass(t.sev)) { t.reported = true; doReport(t); }
+      tracks = tracks.filter((t) => frameNo - t.lastSeen <= 15); // kayıp izleri temizle
+    }
+
+    // FOTOĞRAF: tek kare, takip yok — eşiği geçenleri doğrudan raporla
+    function reportImmediate(dets, src) {
+      showCur(dets);
+      dets.filter((d) => d.confidence >= reportConf && sevPass(d.sev))
+        .forEach((d) => doReport({ en: d.en, tr: d.tr, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box) }));
+    }
+
+    function doReport(t) {
+      addToStrip(t.crop, { en: t.en, tr: t.tr, sev: t.sev, confidence: t.conf });
+      typeCounts[t.tr] = (typeCounts[t.tr] || 0) + 1; renderTypeGrid();
       if (!$("autoSend").checked) return;
-
       const gps = lastGps || { lat: 41.0082, lng: 28.9784 };
-      const key = `${gps.lat.toFixed(4)},${gps.lng.toFixed(4)},${top.tr},${top.sev}`;
-      const now = Date.now();
-      if (recentlySent.has(key) && now - recentlySent.get(key) < 8000) return;
-      recentlySent.set(key, now);
-
-      const crop = cropBox(srcCanvas, top.box);
-      addToStrip(crop, top);
-      typeCounts[top.tr] = (typeCounts[top.tr] || 0) + 1; renderTypeGrid();
-
       fetch(`${API_BASE}/api/detections`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lat: gps.lat, lng: gps.lng, timestamp: new Date().toISOString(),
-          severity: top.sev, label: top.tr, confidence: Number(top.confidence.toFixed(2)), image: crop,
+          severity: t.sev, label: t.tr, confidence: Number(t.conf.toFixed(2)), image: t.crop,
         }),
       }).then((r) => r.json()).then((j) => {
         if (j.success) { sentDetections++; $("sentCount").textContent = sentDetections;
-          logLine(`✔ #${j.id} ${top.tr} — ${top.sev} (${(top.confidence * 100).toFixed(0)}%)`); }
+          logLine(`✔ #${j.id} ${t.tr} — ${t.sev} (${(t.conf * 100).toFixed(0)}%)`); }
         else logLine(`✖ Gönderim hatası: ${j.error || "?"}`);
       }).catch(() => logLine("✖ Sunucuya ulaşılamadı"));
     }
@@ -400,7 +441,7 @@
       srcImg.onload = async () => {
         work.width = srcImg.naturalWidth; work.height = srcImg.naturalHeight;
         work.getContext("2d").drawImage(srcImg, 0, 0); showStage();
-        const d = await detectFrame(work); logLine(`Fotoğraf işlendi — ${d.length} bozukluk bulundu.`);
+        const d = await detectFrame(work, false); logLine(`Fotoğraf işlendi — ${d.length} bozukluk bulundu.`);
       };
       srcImg.src = URL.createObjectURL(f);
     };
@@ -435,12 +476,16 @@
       running = false; if (rafId) cancelAnimationFrame(rafId);
       if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
       try { video.pause(); } catch {}
+      tracks = []; frameNo = 0;   // yeni kaynakta takip sıfırlansın
       $("stopBtn").disabled = true;
     }
     function showStage() { $("placeholder").classList.add("hidden"); output.classList.remove("hidden"); }
 
     $("confSlider").oninput = (e) => { confThres = parseFloat(e.target.value); $("confVal").textContent = confThres.toFixed(2); };
     $("iouSlider").oninput = (e) => { iouThres = parseFloat(e.target.value); $("iouVal").textContent = iouThres.toFixed(2); };
+    $("reportSlider").oninput = (e) => { reportConf = parseFloat(e.target.value); $("reportVal").textContent = reportConf.toFixed(2); };
+    $("persistSlider").oninput = (e) => { persistFrames = parseInt(e.target.value, 10); $("persistVal").textContent = persistFrames; };
+    $("minSev").onchange = (e) => { minSeverity = e.target.value; };
 
     startGps(); loadModel();
   </script>
