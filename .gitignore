@@ -30,3 +30,6 @@ training/__pycache__/
 .DS_Store
 Thumbs.db
 *.tmp
+
+# Eğitim ara ONNX çıktıları (deploy modeli frontend/models/ altında)
+training/*.onnx

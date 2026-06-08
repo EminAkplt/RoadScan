@@ -46,7 +46,7 @@ function saveBase64Image(dataUrl) {
 // =====================================================================
 app.post("/api/detections", async (req, res) => {
   try {
-    const { lat, lng, timestamp, severity, confidence, image } = req.body;
+    const { lat, lng, timestamp, severity, confidence, image, label } = req.body;
 
     if (
       typeof lat !== "number" ||
@@ -61,12 +61,13 @@ app.post("/api/detections", async (req, res) => {
     }
 
     const imagePath = saveBase64Image(image);
+    const labelVal = typeof label === "string" ? label.slice(0, 40) : null;
 
     const result = await db.query(
-      `INSERT INTO detections (lat, lng, timestamp, severity, confidence, image_path)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO detections (lat, lng, timestamp, severity, label, confidence, image_path)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id`,
-      [lat, lng, timestamp, severity, confidence, imagePath]
+      [lat, lng, timestamp, severity, labelVal, confidence, imagePath]
     );
 
     res.json({ success: true, id: result.rows[0].id });
@@ -81,18 +82,16 @@ app.post("/api/detections", async (req, res) => {
 // =====================================================================
 app.get("/api/detections", async (req, res) => {
   try {
-    const { severity } = req.query;
-    let result;
-    if (severity) {
-      result = await db.query(
-        "SELECT * FROM detections WHERE severity = $1 ORDER BY timestamp DESC",
-        [severity]
-      );
-    } else {
-      result = await db.query(
-        "SELECT * FROM detections ORDER BY timestamp DESC"
-      );
-    }
+    const { severity, label } = req.query;
+    const conds = [];
+    const params = [];
+    if (severity) { params.push(severity); conds.push(`severity = $${params.length}`); }
+    if (label) { params.push(label); conds.push(`label = $${params.length}`); }
+    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+    const result = await db.query(
+      `SELECT * FROM detections ${where} ORDER BY timestamp DESC`,
+      params
+    );
     res.json(result.rows);
   } catch (err) {
     console.error("[GET /api/detections]", err.message);
@@ -113,6 +112,12 @@ app.get("/api/detections/stats", async (req, res) => {
       "SELECT COUNT(*)::int AS c FROM detections WHERE created_at >= NOW() - INTERVAL '24 hours'"
     );
 
+    // Bozukluk türüne göre dağılım
+    const byLabel = await db.query(
+      `SELECT COALESCE(label, 'Bilinmiyor') AS label, COUNT(*)::int AS c
+       FROM detections GROUP BY label ORDER BY c DESC`
+    );
+
     // En yoğun bölge: koordinatları ~111 m'lik kareye yuvarlayıp kümele
     const hotspot = await db.query(
       `SELECT ROUND(lat::numeric, 3) AS glat,
@@ -128,6 +133,7 @@ app.get("/api/detections/stats", async (req, res) => {
       total: total.rows[0].c,
       critical: critical.rows[0].c,
       last24h: last24.rows[0].c,
+      byLabel: byLabel.rows, // [{label, c}, ...]
       hotspot: hotspot.rows[0]
         ? {
             lat: Number(hotspot.rows[0].glat),

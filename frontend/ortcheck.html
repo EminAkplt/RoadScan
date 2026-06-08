@@ -32,8 +32,8 @@
         ort.env.wasm.numThreads = 1;
         ort.env.wasm.proxy = false;
 
-        log("\n1) Model dosyası indiriliyor (models/pothole.onnx)…");
-        const r = await fetch("models/pothole.onnx");
+        log("\n1) Model dosyası indiriliyor (models/road_damage.onnx)…");
+        const r = await fetch("models/road_damage.onnx");
         log("   HTTP " + r.status + " " + (r.headers.get("content-type") || ""), r.ok ? "ok" : "err");
         if (!r.ok) { log("   Model indirilemedi, durduruldu.", "err"); return; }
         const buf = new Uint8Array(await r.arrayBuffer());

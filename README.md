@@ -8,21 +8,31 @@
 [![ONNX Runtime Web](https://img.shields.io/badge/ONNX%20Runtime-Web-005CED?logo=onnx&logoColor=white)](https://onnxruntime.ai)
 [![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)](https://leafletjs.com)
 
-Araç ön kamerasından (dashcam) alınan görüntü akışında yoldaki **çukurları (pothole) yapay zekâ ile gerçek zamanlı tespit eden**, her tespiti **GPS koordinatı ve zaman damgasıyla** eşleştirip merkezi bir veritabanına raporlayan tam yığın (full-stack) sistem.
+Araç ön kamerasından (dashcam) alınan görüntü akışında yoldaki **bozuklukları (çukur ve çatlak türleri) yapay zekâ ile gerçek zamanlı tespit eden**, her tespiti **GPS koordinatı ve zaman damgasıyla** eşleştirip, tespit edilen bölgeyi **kırparak** merkezi bir veritabanına raporlayan tam yığın (full-stack) sistem.
 
-Tespit, **kendi eğittiğimiz bir YOLOv8 nesne tespit modeliyle** yapılır ve model **kullanıcının cihazında, tarayıcıda, internetsiz** çalışır (ONNX Runtime Web). Model **ONNX** formatında olduğu için aynı dosya ileride telefon / Raspberry Pi / Jetson gibi **edge cihazlarda native** de çalıştırılabilir.
+Tespit, **çok sınıflı bir YOLOv8 yol-hasarı modeliyle** yapılır ve model **kullanıcının cihazında, tarayıcıda, internetsiz** çalışır (ONNX Runtime Web). Model **ONNX** formatında olduğu için aynı dosya ileride telefon / Raspberry Pi / Jetson gibi **edge cihazlarda native** de çalıştırılabilir.
+
+### Tespit edilen bozukluk türleri
+
+| Sınıf (model) | Türkçe | İkon |
+|---------------|--------|------|
+| Longitudinal Crack | Boyuna Çatlak | ↕️ |
+| Transverse Crack | Enine Çatlak | ↔️ |
+| Alligator Crack | Timsah Sırtı Çatlak | 🐊 |
+| Potholes | Çukur | 🕳️ |
 
 ---
 
 ## ✨ Özellikler
 
-- **Gerçek yapay zekâ tespiti:** Eğitilmiş **YOLOv8n** modeli — klasik kenar tespitinin aksine "çukur" kavramını öğrenmiştir, yanlış pozitifler çok daha az.
+- **Gerçek yapay zekâ tespiti:** Eğitilmiş **çok sınıflı YOLOv8** modeli — çukura ek olarak **3 çatlak türünü** de ayırt eder; klasik kenar tespitine göre çok daha az yanlış pozitif.
+- **Tespit kırpma:** Bulunan her bozukluğun bölgesi kırpılıp panele yakın-çekim olarak gönderilir.
 - **Tamamen offline / cihaz üstü:** Model ve çalışma zamanı (`.onnx` + `.wasm`) projeye gömülü; çıkarım için internet veya sunucu gerekmez.
 - **WebGPU hızlandırma** (varsa) + her cihazda **WASM** yedeği.
 - **Üç görüntü kaynağı:** Fotoğraf, video dosyası, canlı webcam (mobilde arka kamera).
 - **Severity sınıflandırma:** kutu boyutuna göre Küçük / Orta / Kritik (sarı / turuncu / kırmızı); güven skoru doğrudan modelden gelir.
-- **Otomatik raporlama:** tespit anında GPS + zaman + güven + JPEG snapshot paketlenip sunucuya gönderilir.
-- **Yönetim paneli:** Leaflet haritada renk kodlu pinler, filtrelenebilir liste, özet istatistik kartları, 30 sn'de bir otomatik yenileme.
+- **Otomatik raporlama:** tespit anında GPS + zaman + tür + güven + kırpılmış JPEG paketlenip sunucuya gönderilir.
+- **Yönetim paneli:** Leaflet haritada renk kodlu pinler, tür/severity/tarih filtreleri, kırpılmış görüntü listesi, tür dağılımı ve özet istatistik kartları, 30 sn'de bir otomatik yenileme.
 - **Tamamen Türkçe arayüz**, mobil uyumlu, framework'süz vanilla JS.
 
 ---
@@ -84,8 +94,8 @@ npm start
 - **Tespit motoru:** http://localhost:3000/index.html
 - **Yönetim paneli:** http://localhost:3000/panel.html
 
-> ⚠️ Tespit motorunun çalışması için eğitilmiş model gerekir: `frontend/models/pothole.onnx`.
-> Modeli aşağıdaki adımlarla kendiniz eğitip oluşturabilirsiniz (repoda hazır model de bulunabilir).
+> ⚠️ Tespit motorunun çalışması için model gerekir: `frontend/models/road_damage.onnx` (çok sınıflı yol hasarı modeli).
+> Repoda hazır model bulunur; ayrıca aşağıdaki adımlarla kendiniz de eğitebilirsiniz.
 
 ### 2) Modeli eğitme (opsiyonel — `training/`)
 
@@ -120,8 +130,8 @@ PGDATABASE=roadscan
 |-------|----------|----------|
 | `POST` | `/api/detections` | Yeni tespit kaydı (snapshot dosyaya yazılır) |
 | `GET` | `/api/detections` | Tüm tespitler |
-| `GET` | `/api/detections?severity=Kritik` | Severity'e göre filtreli |
-| `GET` | `/api/detections/stats` | Özet istatistikler |
+| `GET` | `/api/detections?severity=Kritik&label=Çukur` | Severity ve/veya türe göre filtreli |
+| `GET` | `/api/detections/stats` | Özet istatistikler (+ tür dağılımı `byLabel`) |
 | `DELETE` | `/api/detections/:id` | Kaydı ve görüntüyü sil |
 | `GET` | `/api/health` | Sağlık kontrolü |
 
@@ -129,8 +139,11 @@ PGDATABASE=roadscan
 
 ```json
 { "lat": 41.0082, "lng": 28.9784, "timestamp": "2024-01-15T14:32:00Z",
-  "severity": "Kritik", "confidence": 0.87, "image": "data:image/jpeg;base64,..." }
+  "severity": "Kritik", "label": "Çukur", "confidence": 0.87,
+  "image": "data:image/jpeg;base64,..." }
 ```
+
+> `image` artık tespit edilen bölgenin **kırpılmış** görüntüsüdür; `label` bozukluk türüdür.
 
 ---
 
@@ -143,8 +156,9 @@ CREATE TABLE detections (
   lng DOUBLE PRECISION NOT NULL,
   timestamp TIMESTAMPTZ NOT NULL,
   severity VARCHAR(20) NOT NULL,
+  label VARCHAR(40),            -- bozukluk türü (çukur / çatlak vb.)
   confidence FLOAT NOT NULL,
-  image_path TEXT,
+  image_path TEXT,              -- tespitin kırpılmış görüntüsü
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
@@ -158,7 +172,7 @@ RoadScan/
 ├── frontend/
 │   ├── index.html         # Tespit motoru (YOLO + ONNX Runtime Web)
 │   ├── panel.html         # Yönetim paneli (Leaflet)
-│   ├── models/            # pothole.onnx + model_meta.json (eğitim çıktısı)
+│   ├── models/            # road_damage.onnx + model_meta.json (model çıktısı)
 │   └── vendor/ort/        # ONNX Runtime Web dosyaları (npm install ile üretilir)
 ├── backend/
 │   ├── server.js          # Express API
@@ -184,14 +198,15 @@ RoadScan/
 
 Eğitilen model **ONNX** formatındadır — taşınabilir ve evrenseldir:
 - **Tarayıcı** (bu repo): her cihazda, telefon dahil, offline.
-- **Native edge** (ileride): aynı `pothole.onnx` Raspberry Pi / Jetson / mobil üzerinde ONNX Runtime / TensorRT / TFLite ile çalıştırılabilir.
-- **YOLOv8n** edge için en hafif sürümdür; çok zayıf cihazlar için **INT8 quantization** (`export.py --int8`) ile model ~4× küçültülebilir.
+- **Native edge** (ileride): aynı `road_damage.onnx` Raspberry Pi / Jetson / mobil üzerinde ONNX Runtime / TensorRT / TFLite ile çalıştırılabilir.
+- Çok zayıf cihazlar için **INT8 quantization** (`export.py --int8`) ile model ~4× küçültülebilir.
 
 ---
 
 ## ⚠️ Notlar
 
-- Modelin doğruluğu eğitildiği veriye bağlıdır. İlk sürüm açık kaynak bir pothole veri setiyle eğitilir; sahaya (Türk yolları, dashcam açısı) özel görüntülerle yeniden eğitilerek doğruluk artırılabilir.
+- Dağıtılan çok sınıflı model, açık kaynak **RDD2022** (Crowdsensing-based Road Damage Detection Challenge) verisiyle eğitilmiş YOLOv8 ağırlıklarına dayanır ([oracl4/RoadDamageDetection](https://github.com/oracl4/RoadDamageDetection)). `training/` altındaki betikler kendi modelinizi (ör. yalnızca çukur) eğitmenizi de sağlar.
+- Modelin doğruluğu eğitildiği veriye bağlıdır; sahaya (Türk yolları, dashcam açısı) özel görüntülerle yeniden eğitilerek artırılabilir.
 - GPS izni verilmezse varsayılan olarak İstanbul koordinatı kullanılır.
 - Threaded WASM için tarayıcı SharedArrayBuffer ister; bu olmadan ONNX Runtime tek iş parçacıklı WASM ya da WebGPU ile çalışır (sorun olmaz).
 

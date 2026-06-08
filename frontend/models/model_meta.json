@@ -1,7 +1,10 @@
 {
   "input_size": 640,
   "names": {
-    "0": "pothole"
+    "0": "Longitudinal Crack",
+    "1": "Transverse Crack",
+    "2": "Alligator Crack",
+    "3": "Potholes"
   },
-  "num_classes": 1
+  "num_classes": 4
 }
