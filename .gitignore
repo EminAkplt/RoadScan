@@ -18,6 +18,9 @@ training/.venv/
 training/dataset/
 training/dataset_raw/
 training/datasets/
+training/bharat_raw/
+training/*_raw/
+training/bharat/
 training/runs/
 runs/
 training/*.pt

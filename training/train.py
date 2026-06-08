@@ -37,6 +37,7 @@ def main():
         batch=args.batch,
         device=device,
         patience=25,        # iyileşme durursa erken durdur
+        workers=4,          # işçi sayısı düşük: bellek/pagefile güvenliği
         project="runs",
         name=args.name,
         pretrained=True,

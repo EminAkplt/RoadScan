@@ -1,0 +1,6 @@
+path: C:/Users/Emin/Desktop/RoadScan/training/bharat_raw/BharatPotHole/BharatPotHole
+train: train/images
+val: valid/images
+test: test/images
+nc: 1
+names: ['pothole']
