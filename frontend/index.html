@@ -176,9 +176,9 @@
     let running = false, rafId = null, stream = null, inferring = false;
     let totalDetections = 0, sentDetections = 0, lastGps = null;
     // === SABİT AYARLAR — son kullanıcıya kapalı, tamamı önceden ayarlı ===
-    const DET_CONF = 0.30;        // model kutu üretim eşiği (ham tespit)
+    const DET_CONF = 0.20;        // model kutu üretim eşiği — kritik çukuru kaçırmamak için düşük
     const IOU_NMS = 0.45;         // NMS örtüşme eşiği
-    const REPORT_CONF = 0.50;     // raporlama için min güven
+    const REPORT_CONF = 0.35;     // raporlama için min güven (recall öncelikli)
     const PERSIST_FRAMES = 3;     // videoda kaç ardışık karede görülmeli
     const LOST_AFTER = 15;        // iz kaç karede kaybolmuş sayılır
     const PROC_FPS = 4;           // saniyede işlenecek kare (edge: 30 yakala, 4 işle)
