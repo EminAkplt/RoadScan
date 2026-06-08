@@ -181,14 +181,18 @@
     const REPORT_CONF = 0.50;     // raporlama için min güven
     const PERSIST_FRAMES = 3;     // videoda kaç ardışık karede görülmeli
     const LOST_AFTER = 15;        // iz kaç karede kaybolmuş sayılır
+    const PROC_FPS = 4;           // saniyede işlenecek kare (edge: 30 yakala, 4 işle)
+    const PROC_INTERVAL = 1000 / PROC_FPS;
+    let lastProc = 0;
     // Tür bazında alan-oranı eşikleri (kutu alanı / kare alanı):
     //   ratio < ignore  → ufak tefek, raporlama dışı (hiç gösterilmez)
     //   ratio >= kritik → Kritik (yolculuğa engel),  arası → Orta (sorun olabilir)
+    // Odak: KRİTİK sorunlar. Çukur en hassas; çatlaklar yalnızca ciddi boyuttaysa raporlanır.
     const SEV_RULES = {
-      "Potholes":           { ignore: 0.0045, kritik: 0.013 }, // çukur: en tehlikeli, küçükken bile kritik olabilir
-      "Alligator Crack":    { ignore: 0.012,  kritik: 0.045 }, // timsah sırtı: geniş yüzey bozulması
-      "Longitudinal Crack": { ignore: 0.016,  kritik: 0.055 }, // boyuna çatlak: ancak belirginse
-      "Transverse Crack":   { ignore: 0.016,  kritik: 0.055 }, // enine çatlak: ancak belirginse
+      "Potholes":           { ignore: 0.0045, kritik: 0.012 }, // çukur: en tehlikeli, erken yakala
+      "Alligator Crack":    { ignore: 0.016,  kritik: 0.050 }, // timsah sırtı: geniş yüzey bozulması
+      "Longitudinal Crack": { ignore: 0.022,  kritik: 0.060 }, // boyuna çatlak: sadece ciddiyse
+      "Transverse Crack":   { ignore: 0.022,  kritik: 0.060 }, // enine çatlak: sadece ciddiyse
     };
     let tracks = [], frameNo = 0;          // kare-arası takip → aynı bozukluk = tek kayıt
     const typeCounts = {};
@@ -459,8 +463,10 @@
     };
     async function loopVideo() {
       if (!running) return;
-      if (!inferring && video.readyState >= 2 && video.videoWidth) {
-        inferring = true;
+      const now = performance.now();
+      // Frame sampling: her kareyi değil, saniyede ~PROC_FPS kareyi işle (edge verimliliği)
+      if (!inferring && now - lastProc >= PROC_INTERVAL && video.readyState >= 2 && video.videoWidth) {
+        inferring = true; lastProc = now;
         work.width = video.videoWidth; work.height = video.videoHeight;
         work.getContext("2d").drawImage(video, 0, 0, work.width, work.height);
         try { await detectFrame(work); } catch (e) { logLine("✖ Çıkarım hatası: " + e.message); }
@@ -474,7 +480,7 @@
       running = false; if (rafId) cancelAnimationFrame(rafId);
       if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
       try { video.pause(); } catch {}
-      tracks = []; frameNo = 0;   // yeni kaynakta takip sıfırlansın
+      tracks = []; frameNo = 0; lastProc = 0;   // yeni kaynakta takip/zamanlama sıfırlansın
       $("stopBtn").disabled = true;
     }
     function showStage() { $("placeholder").classList.add("hidden"); output.classList.remove("hidden"); }
