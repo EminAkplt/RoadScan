@@ -185,6 +185,9 @@
     const PROC_FPS = 4;           // saniyede işlenecek kare (edge: 30 yakala, 4 işle)
     const PROC_INTERVAL = 1000 / PROC_FPS;
     let lastProc = 0;
+    // Görüntü işleme doğrulaması (yalnızca RAPORLAMADA — çöp Kritik'leri eler)
+    const CV_ROI_TOP = 0.35;      // kutu merkezi bu orandan yukarıdaysa (gökyüzü/bina) raporlama
+    const CV_TEXTURE_MIN = 5.0;   // bölge bundan düz/tek renkse (araç/duvar/asfalt) raporlama
     // Tür bazında alan-oranı eşikleri (kutu alanı / kare alanı):
     //   ratio < ignore  → ufak tefek, raporlama dışı (hiç gösterilmez)
     //   ratio >= kritik → Kritik,  >= orta → Orta,  altı → Küçük
@@ -324,6 +327,32 @@
       return c.toDataURL("image/jpeg", 0.78);
     }
 
+    // ====== Görüntü işleme doğrulaması — çöp Kritik'leri ele (yalnızca raporlamada) ======
+    const _cvCanvas = document.createElement("canvas");
+    function passesCV(src, box) {
+      // 1) ROI: yol alt bölgede. Üst kısımdaki tespitler (gökyüzü/bina/ağaç) → reddet
+      const cy = box.y + box.h / 2;
+      if (cy < src.height * CV_ROI_TOP) return false;
+      // 2) Doku: kutu bölgesi neredeyse düz/tek renkse (araç paneli/duvar/boş asfalt) → reddet
+      const S = 48;
+      const x = Math.max(0, box.x), y = Math.max(0, box.y);
+      const w = Math.min(src.width - x, box.w), h = Math.min(src.height - y, box.h);
+      if (w < 6 || h < 6) return false;
+      _cvCanvas.width = S; _cvCanvas.height = S;
+      const cx = _cvCanvas.getContext("2d");
+      cx.drawImage(src, x, y, w, h, 0, 0, S, S);
+      const d = cx.getImageData(0, 0, S, S).data;
+      const g = new Float32Array(S * S);
+      for (let i = 0; i < S * S; i++) g[i] = d[i * 4] * 0.299 + d[i * 4 + 1] * 0.587 + d[i * 4 + 2] * 0.114;
+      let grad = 0, n = 0;
+      for (let yy = 1; yy < S - 1; yy++)
+        for (let xx = 1; xx < S - 1; xx++) {
+          const i = yy * S + xx;
+          grad += Math.abs(g[i - 1] - g[i + 1]) + Math.abs(g[i - S] - g[i + S]); n++;
+        }
+      return grad / n >= CV_TEXTURE_MIN; // düz yüzey düşük gradyan → reddet
+    }
+
     // ====== Tek kare: çıkarım + çizim + rapor ======
     async function detectFrame(srcCanvas, isVideo = true) {
       const t0 = performance.now();
@@ -392,14 +421,14 @@
       dets.forEach((d, i) => { if (used.has(i)) return;
         tracks.push({ en: d.en, tr: d.tr, box: d.box, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box), frames: 1, lastSeen: frameNo, reported: false }); });
       for (const t of tracks)
-        if (!t.reported && t.sev === "Kritik" && t.frames >= PERSIST_FRAMES && t.conf >= REPORT_CONF) { t.reported = true; doReport(t); }
+        if (!t.reported && t.sev === "Kritik" && t.frames >= PERSIST_FRAMES && t.conf >= REPORT_CONF && passesCV(src, t.box)) { t.reported = true; doReport(t); }
       tracks = tracks.filter((t) => frameNo - t.lastSeen <= LOST_AFTER); // kayıp izleri temizle
     }
 
     // FOTOĞRAF: tek kare, takip yok — yalnızca Kritik'leri raporla
     function reportImmediate(dets, src) {
       showCur(dets);
-      dets.filter((d) => d.sev === "Kritik" && d.confidence >= REPORT_CONF)
+      dets.filter((d) => d.sev === "Kritik" && d.confidence >= REPORT_CONF && passesCV(src, d.box))
         .forEach((d) => doReport({ en: d.en, tr: d.tr, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box) }));
     }
 

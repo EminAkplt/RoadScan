@@ -62,6 +62,7 @@ Tespit, **çok sınıflı bir YOLOv8 yol-hasarı modeliyle** yapılır ve model 
 2. **YOLOv8 ONNX** modeli çıkarım yapar (WebGPU veya WASM).
 3. Çıktı ayrıştırılır, **NMS** ile çakışan kutular elenir, kutular orijinal boyuta ölçeklenir.
 4. **Tüm bozukluklar** kutu + severity etiketiyle ekrana çizilir; videoda kare-arası takiple **aynı bozukluk tek kayıt** olur ve **yalnızca Kritik** olanlar GPS/zaman/kırpılmış görüntüyle panele gönderilir.
+5. **Görüntü işleme doğrulaması (hibrit):** Panele gitmeden önce her Kritik aday klasik CV ile süzülür — kutu yol bölgesinde (ROI) değilse (gökyüzü/bina) veya bölge neredeyse düz/tek renkse (araç paneli/duvar) **elenir** → yanlış pozitifler panele düşmez.
 
 ### Severity & Raporlama
 
