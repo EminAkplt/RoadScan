@@ -21,6 +21,7 @@ training/datasets/
 training/bharat_raw/
 training/*_raw/
 training/bharat/
+training/merged/
 training/runs/
 runs/
 training/*.pt
@@ -36,3 +37,6 @@ Thumbs.db
 
 # Eğitim ara ONNX çıktıları (deploy modeli frontend/models/ altında)
 training/*.onnx
+
+# Isı bekçisi logu
+training/temp_watch.log
