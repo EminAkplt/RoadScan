@@ -205,8 +205,8 @@ Eğitilen model **ONNX** formatındadır — taşınabilir ve evrenseldir:
 
 ## ⚠️ Notlar
 
-- Dağıtılan çok sınıflı model, açık kaynak **RDD2022** (Crowdsensing-based Road Damage Detection Challenge) verisiyle eğitilmiş YOLOv8 ağırlıklarına dayanır ([oracl4/RoadDamageDetection](https://github.com/oracl4/RoadDamageDetection)). `training/` altındaki betikler kendi modelinizi (ör. yalnızca çukur) eğitmenizi de sağlar.
-- Modelin doğruluğu eğitildiği veriye bağlıdır; sahaya (Türk yolları, dashcam açısı) özel görüntülerle yeniden eğitilerek artırılabilir.
+- Dağıtılan model, **üç açık kaynak veri setinin birleşimiyle** (RDD2022 + BharatPotHole + IVCNZ Pothole, ~46.000 görüntü, 4 sınıf) sıfırdan eğitilmiş kendi **YOLOv8s** modelimizdir (640px eğitim, 960px çıkarım). Doğrulama mAP@50 ≈ **0.61** (çukur 0.56, timsah çatlak 0.68, boyuna/enine çatlak ~0.60). Eğitim betikleri ve birleştirme aracı `training/` altındadır (`merge_datasets.py`, `train.py`, `export.py`).
+- Modelin doğruluğu eğitildiği veriye bağlıdır; sahaya (Türk yolları, dashcam açısı) özel görüntülerle **fine-tune** edilerek artırılabilir — model boyutu/hızı değişmeden.
 - GPS izni verilmezse varsayılan olarak İstanbul koordinatı kullanılır.
 - Threaded WASM için tarayıcı SharedArrayBuffer ister; bu olmadan ONNX Runtime tek iş parçacıklı WASM ya da WebGPU ile çalışır (sorun olmaz).
 
