@@ -177,9 +177,9 @@
     let running = false, rafId = null, stream = null, inferring = false;
     let totalDetections = 0, sentDetections = 0, lastGps = null;
     // === SABİT AYARLAR — son kullanıcıya kapalı, tamamı önceden ayarlı ===
-    const DET_CONF = 0.28;        // çok düşük eşik çöp/abartılı kutu üretiyordu — dengeli değer
-    const IOU_NMS = 0.45;         // NMS örtüşme eşiği
-    const REPORT_CONF = 0.40;     // raporlama için min güven
+    const DET_CONF = 0.15;        // agresif recall: yoğun hasarda mümkün olduğunca çok bozukluk yakala
+    const IOU_NMS = 0.55;         // daha az bastır → bitişik bozuklukları ayrı tut
+    const REPORT_CONF = 0.30;     // raporlama için min güven (kritikleri kaçırmamak için düşük)
     const PERSIST_FRAMES = 3;     // videoda kaç ardışık karede görülmeli
     const LOST_AFTER = 15;        // iz kaç karede kaybolmuş sayılır
     const PROC_FPS = 4;           // saniyede işlenecek kare (edge: 30 yakala, 4 işle)
