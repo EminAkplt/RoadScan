@@ -1,67 +1,45 @@
-# RoadScan — Yapay Zekâ Tespit Modeli Entegrasyon Planı
+# RoadScan — Geliştirme Planı ve Mevcut Durum
 
-> Hedef: Klasik kenar tespitini, **kendi eğittiğimiz YOLOv8 modeliyle** değiştirmek.
-> Model tarayıcıda/cihazda **yerel ve internetsiz** çalışacak (ONNX Runtime Web).
-> GPU (RTX 5060) yalnızca **modeli eğitmek** için kullanılır; son kullanıcıya GPU gerekmez.
+> Araç içi dashcam ile yol bozukluğu (çukur + çatlak) tespiti. Model **tarayıcıda, cihaz üstü, offline** çalışır (ONNX Runtime Web). Hedef: küçük donanımlarda (otobüs/araç) çalışabilen, pazarlanabilir bir edge sistemi.
 
-## Mimari karar
-- **Tespit nerede:** Tarayıcıda, cihaz üzerinde (offline). Model `.onnx` + ONNX Runtime Web `.wasm` dosyaları projeye gömülü → internetsiz çalışır.
-- **Model:** Kendi eğittiğimiz **YOLOv8n** (tarayıcıda hızlı, ~6–12 MB).
-- **Backend:** Değişmiyor (Node/Express/PostgreSQL kayıt + panel akışı aynı kalır).
+## ✅ Tamamlananlar
 
----
+### Mimari
+- **Tespit motoru** (`frontend/index.html`): YOLOv8 ONNX, ONNX Runtime Web (WebGPU + WASM yedeği), tamamen offline.
+- **Backend** (`backend/`): Node/Express + PostgreSQL; `detections` tablosu (lat/lng/timestamp/severity/label/confidence/image_path).
+- **Yönetim paneli** (`frontend/panel.html`): Leaflet harita, kırpılmış görüntü listesi, tür/severity/tarih filtreleri, tür dağılımı, istatistik kartları.
 
-## Aşama 0 — Eğitim ortamı (Python + GPU)
-- `training/` altında Python 3.12 sanal ortamı (mevcut pip/Python sürüm karışıklığını izole eder).
-- RTX 5060 (Blackwell) için **PyTorch CUDA (cu128, torch ≥ 2.7)** + `ultralytics` kurulumu.
-- `torch.cuda.is_available()` ve GPU doğrulaması.
-- ⚠️ Büyük indirme (~2.5 GB torch). Tek seferlik.
+### Model (çok sınıflı, 4 sınıf: Boyuna/Enine/Timsah Çatlak + Çukur)
+- Üç açık veri seti **birleştirildi** (`training/merge_datasets.py`):
+  RDD2022 + BharatPotHole + IVCNZ → **~46.000 görüntü**, çukur 3 kaynaktan beslendi.
+- **YOLOv8s** sıfırdan eğitildi (RTX 5060, 80 epoch, ~13 saat) — `training/train.py`.
+- Doğrulama: **mAP@50 ≈ 0.61** (timsah 0.68 / enine 0.60 / boyuna 0.60 / çukur 0.56).
+- **640px eğit → 960px çıkarım** export edildi (`training/export.py`) → `frontend/models/road_damage.onnx`.
 
-## Aşama 1 — Veri seti
-- Ücretsiz pothole veri seti (YOLO formatı) indir.
-  - 1. tercih: doğrudan indirilebilen (GitHub/Kaggle) bir set.
-  - Gerekirse senden **ücretsiz Roboflow API anahtarı** isteyeceğim (tek satır).
-- `training/dataset/` altına aç, `data.yaml` hazırla.
-- Veri seti `.gitignore`'a eklenir (repoya gitmez, büyük).
+### Raporlama mantığı (DB'yi şişirmeden)
+- **Ekranda 3 kademe de** (Küçük/Orta/Kritik) kutulanır.
+- **Panele yalnızca Kritik** gönderilir (ciddi/yolculuğu etkileyen).
+- **Kare-arası IoU takibi** → aynı fiziksel bozukluk videoda tek kayıt.
+- Kalıcılık (N ardışık kare) + ayrı raporlama güven eşiği.
+- Tespit edilen bölge **kırpılıp** panele yakın-çekim olarak gider.
+- Tüm eşikler kod içinde sabit — **son kullanıcı hassasiyet ayarı yok.**
 
-## Aşama 2 — Eğitim
-- YOLOv8n, `imgsz=640`, GPU'ya göre batch, ~50–100 epoch.
-- RTX 5060'ta tahmini ~1–2 saat (veri boyutuna göre).
-- Çıktı: `runs/.../best.pt` + mAP metrikleri.
+### Edge / pazarlanabilirlik
+- Çıktı **ONNX** (taşınabilir): tarayıcı + ileride native (Raspberry Pi / Jetson / telefon).
+- Frame sampling (~4 FPS) — küçük donanım için hesap yükü düşük.
+- INT8 quantization opsiyonu (`export.py --int8`).
 
-## Aşama 3 — ONNX'e dışa aktar
-- `best.pt → pothole.onnx` (opset, imgsz 640, simplify).
-- `frontend/models/pothole.onnx` içine koy (repoya dahil — ürünün parçası).
+## 🔧 Mevcut sınır (bilinen)
+- Model **Hindistan/Japonya** ağırlıklı veriyle eğitildi → **Türk yollarında** (özellikle suyla dolu/aşırı kırık çukurlarda) **recall sınırlı.** Eşik düşürmek bir miktar yardımcı olur ama tavanı modelin verisi belirler.
 
-## Aşama 4 — Frontend (tarayıcıda çıkarım)
-- OpenCV.js Canny pipeline'ı **kaldır**, yerine **ONNX Runtime Web**.
-- `onnxruntime-web` ve `.wasm` dosyalarını **yerel** servis et (CDN yok → offline).
-- Ön işleme: letterbox 640×640, normalize, NCHW Float32.
-- Son işleme: eşik + **NMS** (JS'te), kutuları orijinal boyuta ölçekle.
-- Çizim + severity (kutu alanı + güven skoru → Küçük/Orta/Kritik korunur).
-- 3 kaynak (foto/video/webcam), snapshot, backend'e POST **aynen korunur**.
+## 🗺️ Sıradaki adımlar
+1. **Türk verisiyle fine-tune (en yüksek etki):** sahadan/otobüs videolarından 100-500 kare etiketle → mevcut modeli ince ayarla. Domain uyunca çukur recall'ı belirgin artar (model boyutu/hızı değişmeden).
+2. **GPS entegrasyonu:** gerçek koordinat + sunucuda ~15-20 m GPS kümeleme (aynı çukur tek kayıt).
+3. **Store-and-forward:** araçta internet kesik olduğunda lokal kuyruk + bağlantı gelince senkron.
+4. **Native edge dağıtımı:** aynı ONNX'i otobüs içi küçük cihaza (Pi/RK3588/Jetson) taşı, INT8 ile hızlandır.
 
-## Aşama 5 — Entegrasyon + test
-- Express, `models/` ve `.wasm` dosyalarını doğru servis etsin.
-- Örnek çukur fotoğrafı/videosuyla uçtan uca test.
-- README + PLAN güncelle (eğitim adımları, offline notu).
-
-## Aşama 6 — Commit & push
-- Temiz commit (Claude attribution yok), RoadScan reposuna push.
-- `.onnx` + `.wasm` repoda; **veri seti ve venv repoda değil**.
-
----
-
-## Edge / pazarlanabilirlik (mini cihazlar)
-- Çıktı **ONNX** = evrensel, taşınabilir format. Aynı model:
-  - Tarayıcıda (referans demo, her cihaz/telefon) — bu repo
-  - Native edge runtime'da (Raspberry Pi / Jetson / gömülü kart) — ileride aynı `.onnx`
-- **YOLOv8n** zaten edge için tasarlanmış en hafif sürüm.
-- Çok zayıf cihazlar için **INT8 quantization** (model ~4× küçülür, hızlanır) opsiyonu Aşama 3'e eklenir.
-- "Bugün eğitilen model = yarın cihaza konacak model" — ekstra eğitim gerekmez, sadece runtime değişir.
-
-## Riskler / notlar
-- **RTX 50-serisi CUDA:** Doğru torch wheel'i (cu128) şart; kurulumda dikkat.
-- **Tarayıcı hızı:** YOLOv8n WASM'de birkaç FPS; WebGPU varsa çok daha hızlı. Canlı videoda yeterli.
-- **Doğruluk = veri:** Hazır veri seti Türk yollarına %100 uymayabilir; ileride kendi görüntülerimizle iyileştirilebilir (v2).
-- İlk sürüm "çalışır + belirgin doğruluk artışı" hedefler; mükemmel saha doğruluğu kendi verimizle gelir.
+## 📁 İlgili dosyalar
+- `training/merge_datasets.py` — 3 veri setini birleştirir (4 sınıf)
+- `training/train.py` — YOLOv8 eğitimi
+- `training/export.py` — best.pt → ONNX (960px / opsiyonel INT8)
+- `frontend/models/road_damage.onnx` — dağıtılan model

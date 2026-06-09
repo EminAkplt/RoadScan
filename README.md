@@ -30,8 +30,8 @@ Tespit, **çok sınıflı bir YOLOv8 yol-hasarı modeliyle** yapılır ve model 
 - **Tamamen offline / cihaz üstü:** Model ve çalışma zamanı (`.onnx` + `.wasm`) projeye gömülü; çıkarım için internet veya sunucu gerekmez.
 - **WebGPU hızlandırma** (varsa) + her cihazda **WASM** yedeği.
 - **Üç görüntü kaynağı:** Fotoğraf, video dosyası, canlı webcam (mobilde arka kamera).
-- **Severity sınıflandırma:** kutu boyutuna göre Küçük / Orta / Kritik (sarı / turuncu / kırmızı); güven skoru doğrudan modelden gelir.
-- **Otomatik raporlama:** tespit anında GPS + zaman + tür + güven + kırpılmış JPEG paketlenip sunucuya gönderilir.
+- **Severity sınıflandırma:** kutu boyutuna göre Küçük / Orta / Kritik (sarı / turuncu / kırmızı). **Üç kademe de ekranda kutulanır; panele yalnızca Kritik gönderilir** (DB gereksiz kayıtla şişmez).
+- **Otomatik raporlama:** Kritik tespit anında GPS + zaman + tür + güven + kırpılmış JPEG paketlenip sunucuya gönderilir.
 - **Yönetim paneli:** Leaflet haritada renk kodlu pinler, tür/severity/tarih filtreleri, kırpılmış görüntü listesi, tür dağılımı ve özet istatistik kartları, 30 sn'de bir otomatik yenileme.
 - **Tamamen Türkçe arayüz**, mobil uyumlu, framework'süz vanilla JS.
 
@@ -58,20 +58,22 @@ Tespit, **çok sınıflı bir YOLOv8 yol-hasarı modeliyle** yapılır ve model 
 
 ### Tespit akışı (cihaz üstü)
 
-1. Kare → **letterbox** ile 640×640'a getirilir, normalize edilir (Float32 NCHW).
+1. Kare → **letterbox** ile 960×960'a getirilir, normalize edilir (Float32 NCHW).
 2. **YOLOv8 ONNX** modeli çıkarım yapar (WebGPU veya WASM).
 3. Çıktı ayrıştırılır, **NMS** ile çakışan kutular elenir, kutular orijinal boyuta ölçeklenir.
-4. Kutu + severity etiketi çizilir; en güçlü tespit GPS/zaman/snapshot ile sunucuya gönderilir.
+4. **Tüm bozukluklar** kutu + severity etiketiyle ekrana çizilir; videoda kare-arası takiple **aynı bozukluk tek kayıt** olur ve **yalnızca Kritik** olanlar GPS/zaman/kırpılmış görüntüyle panele gönderilir.
 
-### Severity & Güven
+### Severity & Raporlama
 
-| Kutu alanı / kare oranı | Severity | Renk |
-|--------------------------|----------|------|
-| < %2 | Küçük | 🟡 Sarı |
-| %2 – %6 | Orta | 🟠 Turuncu |
-| ≥ %6 | Kritik | 🔴 Kırmızı |
+Severity, **tür + kutu boyutuna** göre üç kademedir (eşikler tür bazlı, kod içinde sabit — son kullanıcı ayarı yok):
 
-Güven skoru doğrudan modelin tespit güveninden (0.0–1.0) gelir. Eşik ve IoU değerleri arayüzdeki sliderlardan ayarlanabilir.
+| Kademe | Renk | Ekranda | Panele |
+|--------|------|---------|--------|
+| Küçük | 🟡 Sarı | ✅ çizilir | ❌ |
+| Orta | 🟠 Turuncu | ✅ çizilir | ❌ |
+| **Kritik** | 🔴 Kırmızı | ✅ çizilir | ✅ **gönderilir** |
+
+Böylece operatör ekranda her şeyi görür ama veritabanına yalnızca **ciddi/yolculuğu etkileyen** bozukluklar düşer. Güven skoru doğrudan modelin tespit güveninden (0.0–1.0) gelir.
 
 ---
 
