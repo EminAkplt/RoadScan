@@ -107,8 +107,9 @@
           <span><b id="fps">0</b> FPS</span>
         </div>
         <div class="legend">
-          <span style="color:var(--kirmizi)">Kritik — yolculuğa engel</span>
-          <span style="color:var(--turuncu)">Orta — sorun olabilir</span>
+          <span style="color:var(--kirmizi)">Kritik (panele gönderilir)</span>
+          <span style="color:var(--turuncu)">Orta</span>
+          <span style="color:var(--sari)">Küçük</span>
         </div>
       </div>
 
@@ -133,10 +134,10 @@
 
         <div class="card">
           <h2>Tespit & Raporlama</h2>
-          <div style="font-size:13px;color:var(--muted);line-height:1.6">Hassasiyet <b style="color:var(--txt)">otomatik ayarlı</b> — yalnızca <b style="color:var(--txt)">yolculuğu etkileyen</b> bozukluklar raporlanır:</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><span class="badge Kritik">Kritik</span> yolculuğa engel olan/olacak</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px"><span class="badge Orta">Orta</span> engel değil ama sorun olabilir</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:10px">Ufak tefek çatlaklar elenir · aynı bozukluk videoda takip edilip <b style="color:var(--txt)">tek kayıt</b> olur.</div>
+          <div style="font-size:13px;color:var(--muted);line-height:1.6">Hassasiyet <b style="color:var(--txt)">otomatik ayarlı</b>. Üç kademe de ekranda kutulanır, <b style="color:var(--txt)">panele yalnızca Kritik gönderilir</b>:</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px"><span class="badge Kritik">Kritik</span> → panele gönderilir</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px"><span class="badge Orta">Orta</span> <span class="badge Küçük">Küçük</span> sadece ekranda gösterilir</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:10px">Aynı bozukluk videoda takip edilip <b style="color:var(--txt)">tek kayıt</b> olur.</div>
           <div style="font-size:13px;color:var(--muted);margin-top:10px">Model: <b id="modelName" style="color:var(--txt)">YOLOv8 · Yol Hasarı</b> · Giriş: <b id="inputSize" style="color:var(--txt)">640</b></div>
         </div>
 
@@ -186,13 +187,13 @@
     let lastProc = 0;
     // Tür bazında alan-oranı eşikleri (kutu alanı / kare alanı):
     //   ratio < ignore  → ufak tefek, raporlama dışı (hiç gösterilmez)
-    //   ratio >= kritik → Kritik (yolculuğa engel),  arası → Orta (sorun olabilir)
-    // Odak: KRİTİK sorunlar. Çukur en hassas; çatlaklar yalnızca ciddi boyuttaysa raporlanır.
+    //   ratio >= kritik → Kritik,  >= orta → Orta,  altı → Küçük
+    // 3 kademe de EKRANDA kutulanır; panele YALNIZCA Kritik gönderilir.
     const SEV_RULES = {
-      "Potholes":           { ignore: 0.0045, kritik: 0.012 }, // çukur: en tehlikeli, erken yakala
-      "Alligator Crack":    { ignore: 0.016,  kritik: 0.050 }, // timsah sırtı: geniş yüzey bozulması
-      "Longitudinal Crack": { ignore: 0.022,  kritik: 0.060 }, // boyuna çatlak: sadece ciddiyse
-      "Transverse Crack":   { ignore: 0.022,  kritik: 0.060 }, // enine çatlak: sadece ciddiyse
+      "Potholes":           { orta: 0.0045, kritik: 0.012 },
+      "Alligator Crack":    { orta: 0.016,  kritik: 0.050 },
+      "Longitudinal Crack": { orta: 0.022,  kritik: 0.060 },
+      "Transverse Crack":   { orta: 0.022,  kritik: 0.060 },
     };
     let tracks = [], frameNo = 0;          // kare-arası takip → aynı bozukluk = tek kayıt
     const typeCounts = {};
@@ -206,13 +207,12 @@
       el.textContent = `[${new Date().toLocaleTimeString("tr-TR")}] ${msg}\n` + el.textContent;
     }
 
-    // ====== Severity: türe + boyuta göre yolculuk etkisi (null = ufak, ele) ======
+    // ====== Severity: türe + boyuta göre 3 kademe (hiçbiri elenmez) ======
     function severityFor(en, ratio) {
-      const r = SEV_RULES[en] || { ignore: 0.012, kritik: 0.045 };
-      if (ratio < r.ignore) return null;                          // ufak tefek → raporlanmaz/gösterilmez
-      return ratio >= r.kritik
-        ? { sev: "Kritik", color: [239, 68, 68] }                 // yolculuğa engel
-        : { sev: "Orta", color: [251, 146, 60] };                 // sorun olabilir
+      const r = SEV_RULES[en] || { orta: 0.012, kritik: 0.045 };
+      if (ratio >= r.kritik) return { sev: "Kritik", color: [239, 68, 68] }; // kırmızı
+      if (ratio >= r.orta)   return { sev: "Orta",   color: [251, 146, 60] }; // turuncu
+      return { sev: "Küçük", color: [250, 204, 21] };                         // sarı (ekranda var, panele gitmez)
     }
 
     // ====== GPS ======
@@ -339,8 +339,7 @@
       const detections = [];
       for (const b of raw) {
         const en = classNames[b.cls] || "?";
-        const sv = severityFor(en, (b.w * b.h) / (W * H));
-        if (!sv) continue; // ufak tefek bozukluk → hiç gösterme/raporlama
+        const sv = severityFor(en, (b.w * b.h) / (W * H)); // 3 kademe, hepsi çizilir
         detections.push({ box: { x: b.x, y: b.y, w: b.w, h: b.h }, sev: sv.sev, color: sv.color, confidence: b.score, en, tr: trLabel(en) });
       }
 
@@ -392,14 +391,14 @@
       dets.forEach((d, i) => { if (used.has(i)) return;
         tracks.push({ en: d.en, tr: d.tr, box: d.box, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box), frames: 1, lastSeen: frameNo, reported: false }); });
       for (const t of tracks)
-        if (!t.reported && t.frames >= PERSIST_FRAMES && t.conf >= REPORT_CONF) { t.reported = true; doReport(t); }
+        if (!t.reported && t.sev === "Kritik" && t.frames >= PERSIST_FRAMES && t.conf >= REPORT_CONF) { t.reported = true; doReport(t); }
       tracks = tracks.filter((t) => frameNo - t.lastSeen <= LOST_AFTER); // kayıp izleri temizle
     }
 
-    // FOTOĞRAF: tek kare, takip yok — eşiği geçenleri doğrudan raporla
+    // FOTOĞRAF: tek kare, takip yok — yalnızca Kritik'leri raporla
     function reportImmediate(dets, src) {
       showCur(dets);
-      dets.filter((d) => d.confidence >= REPORT_CONF)
+      dets.filter((d) => d.sev === "Kritik" && d.confidence >= REPORT_CONF)
         .forEach((d) => doReport({ en: d.en, tr: d.tr, sev: d.sev, conf: d.confidence, crop: cropBox(src, d.box) }));
     }
 
