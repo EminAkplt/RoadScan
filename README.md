@@ -58,7 +58,7 @@ Tespit, **çok sınıflı bir YOLOv8 yol-hasarı modeliyle** yapılır ve model 
 
 ### Tespit akışı (cihaz üstü)
 
-1. Kare → **letterbox** ile 960×960'a getirilir, normalize edilir (Float32 NCHW).
+1. Kare → **letterbox** ile 640×640'a getirilir, normalize edilir (Float32 NCHW).
 2. **YOLOv8 ONNX** modeli çıkarım yapar (WebGPU veya WASM).
 3. Çıktı ayrıştırılır, **NMS** ile çakışan kutular elenir, kutular orijinal boyuta ölçeklenir.
 4. **Tüm bozukluklar** kutu + severity etiketiyle ekrana çizilir; videoda kare-arası takiple **aynı bozukluk tek kayıt** olur ve **yalnızca Kritik** olanlar GPS/zaman/kırpılmış görüntüyle panele gönderilir.
@@ -208,7 +208,7 @@ Eğitilen model **ONNX** formatındadır — taşınabilir ve evrenseldir:
 
 ## ⚠️ Notlar
 
-- Dağıtılan model, **üç açık kaynak veri setinin birleşimiyle** (RDD2022 + BharatPotHole + IVCNZ Pothole, ~46.000 görüntü, 4 sınıf) sıfırdan eğitilmiş kendi **YOLOv8s** modelimizdir (640px eğitim, 960px çıkarım). Doğrulama mAP@50 ≈ **0.61** (çukur 0.56, timsah çatlak 0.68, boyuna/enine çatlak ~0.60). Eğitim betikleri ve birleştirme aracı `training/` altındadır (`merge_datasets.py`, `train.py`, `export.py`).
+- Dağıtılan model, **üç açık kaynak veri setinin birleşimiyle** (RDD2022 + BharatPotHole + IVCNZ Pothole, ~46.000 görüntü, 4 sınıf) sıfırdan eğitilmiş kendi **YOLOv8s** modelimizdir (640px eğitim ve çıkarım). Doğrulama mAP@50 ≈ **0.61** (çukur 0.56, timsah çatlak 0.68, boyuna/enine çatlak ~0.60). Eğitim betikleri ve birleştirme aracı `training/` altındadır (`merge_datasets.py`, `train.py`, `export.py`).
 - Modelin doğruluğu eğitildiği veriye bağlıdır; sahaya (Türk yolları, dashcam açısı) özel görüntülerle **fine-tune** edilerek artırılabilir — model boyutu/hızı değişmeden.
 - GPS izni verilmezse varsayılan olarak İstanbul koordinatı kullanılır.
 - Threaded WASM için tarayıcı SharedArrayBuffer ister; bu olmadan ONNX Runtime tek iş parçacıklı WASM ya da WebGPU ile çalışır (sorun olmaz).

@@ -14,7 +14,7 @@
   RDD2022 + BharatPotHole + IVCNZ → **~46.000 görüntü**, çukur 3 kaynaktan beslendi.
 - **YOLOv8s** sıfırdan eğitildi (RTX 5060, 80 epoch, ~13 saat) — `training/train.py`.
 - Doğrulama: **mAP@50 ≈ 0.61** (timsah 0.68 / enine 0.60 / boyuna 0.60 / çukur 0.56).
-- **640px eğit → 960px çıkarım** export edildi (`training/export.py`) → `frontend/models/road_damage.onnx`.
+- **640px eğitim+çıkarım** export edildi (`training/export.py`) → `frontend/models/road_damage.onnx`.
 
 ### Raporlama mantığı (DB'yi şişirmeden)
 - **Ekranda 3 kademe de** (Küçük/Orta/Kritik) kutulanır.

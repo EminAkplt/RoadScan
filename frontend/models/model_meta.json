@@ -1,5 +1,5 @@
 {
-  "input_size": 960,
+  "input_size": 640,
   "names": {
     "0": "Longitudinal Crack",
     "1": "Transverse Crack",
